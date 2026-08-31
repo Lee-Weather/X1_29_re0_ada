@@ -7,7 +7,7 @@
 | exp0 | 2026-08-28 | 基线：切换 physically_mirrored URDF + 右踝 pitch 符号修复后本机从零训练 6000 轮；回放全程稳定行走、起停正常，速度跟踪 71% 未达标 | ⚠️部分达标（已测试） | 本机训练（RTX A6000） | 无（本机训练） | model_6000.pt |
 | exp0.1 | 2026-08-28 | 逐关节 armature 对齐真机阶跃辨识（膝 0.25 / 髋Pitch 0.16 / 髋Yaw 逐侧），Flux 云端从零 6000 轮；回放稳态跟踪 99%（exp0 为 71%），达标 | ✅达标（已测试） | TASK_20260828_129 | limxmtcm4nrkwbk70j@emalupe.com | model_6000.pt |
 | exp0.2 | 2026-08-31 | 侧向速度抑制：新增 lat_vel 线性惩罚 + feet_distance 0.2→0.3，从 exp0.1 ckpt6000 云端续训 3000 轮 | 🔄训练中 | TASK_20260831_027 | limxmtcm4nrkwbk70j@emalupe.com | 继承 TASK_20260828_129 model_6000 |
-| exp1.0 | 2026-08-31 | 速度域聚焦 [-0.2,0.6]+关闭指令 curriculum；参考轨迹迈步幅度随 \|vx_cmd\| 线性自适应（sagittal 摆幅 × step_scale，标称锚点 0.6 m/s）；云端从零 6000 轮 | 📝待训练 | 待创建 | limxmtcm4nrkwbk70j@emalupe.com（计划沿用） | 待定 |
+| exp1.0 | 2026-08-31 | 速度域聚焦 [-0.2,0.6]+关闭指令 curriculum；参考轨迹迈步幅度随 \|vx_cmd\| 线性自适应（sagittal 摆幅 × step_scale，标称锚点 0.6 m/s）；云端从零 6000 轮 | 🔄训练中 | TASK_20260831_114 | limxmtcm4nrkwbk70j@emalupe.com | 待定 |
 
 ---
 
@@ -428,7 +428,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 | num_envs | 4096 |
 | seed | 5 |
 | learning_rate | 1e-5（fixed） |
-| 算力 | 待定（exp0.1 用 ESKU000001 1×4090D，exp0.2 用 ESKU000005 1×L20；开训前确认） |
+| 算力 | ESKU000001（1×4090D 24G，¥5.4/h；与 exp0.1 相同，避开 exp0.2 占用的 L20） |
 | 镜像 | BJX00000001 / V000124（isaac-gym-v19） |
 | 代码仓库 | https://github.com/Lee-Weather/X1_29_re0_ada.git @ main，commit `140010d`（速度域聚焦 + step_scale 自适应摆幅 + 阶梯回放） |
 | 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp1_0_vel_adaptive --headless --max_iterations=6000` |
