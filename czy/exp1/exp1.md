@@ -7,6 +7,7 @@
 | exp0 | 2026-08-28 | 基线：切换 physically_mirrored URDF + 右踝 pitch 符号修复后本机从零训练 6000 轮；回放全程稳定行走、起停正常，速度跟踪 71% 未达标 | ⚠️部分达标（已测试） | 本机训练（RTX A6000） | 无（本机训练） | model_6000.pt |
 | exp0.1 | 2026-08-28 | 逐关节 armature 对齐真机阶跃辨识（膝 0.25 / 髋Pitch 0.16 / 髋Yaw 逐侧），Flux 云端从零 6000 轮；回放稳态跟踪 99%（exp0 为 71%），达标 | ✅达标（已测试） | TASK_20260828_129 | limxmtcm4nrkwbk70j@emalupe.com | model_6000.pt |
 | exp0.2 | 2026-08-31 | 侧向速度抑制：新增 lat_vel 线性惩罚 + feet_distance 0.2→0.3，从 exp0.1 ckpt6000 云端续训 3000 轮 | 🔄训练中 | TASK_20260831_027 | limxmtcm4nrkwbk70j@emalupe.com | 继承 TASK_20260828_129 model_6000 |
+| exp1.0 | 2026-08-31 | 速度域聚焦 [-0.2,0.6]+关闭指令 curriculum；参考轨迹迈步幅度随 \|vx_cmd\| 线性自适应（sagittal 摆幅 × step_scale，标称锚点 0.6 m/s）；云端从零 6000 轮 | 📝待训练 | 待创建 | limxmtcm4nrkwbk70j@emalupe.com（计划沿用） | 待定 |
 
 ---
 
@@ -73,7 +74,7 @@
 | learning_rate | 1e-5（fixed） |
 | 算力 | NVIDIA RTX A6000 51GB，本机 ThinkStation P720 |
 | 镜像 | 无（conda env F1：python3.8 / torch 1.12.1+cu113 / isaacgym preview4） |
-| 代码仓库 | 本地 `/home/robot/czy/X1_29_re0`（pip install -e .） |
+| 代码仓库 | 本地 `/home/robot/czy/X1_29_re0_ada`（pip install -e .） |
 | 启动命令 | `python humanoid/scripts/train.py --task=x1_dh_stand --run_name=ankle_mirror_6000 --headless` |
 
 ### 6. 预期与验收
@@ -198,8 +199,8 @@
 | learning_rate | 1e-5（fixed） |
 | 算力 | ESKU000001（1×4090D 24G） |
 | 镜像 | BJX00000001 / V000124（isaac-gym-v19） |
-| 代码仓库 | https://github.com/Lee-Weather/X1_29_re0.git @ main，训练代码 commit `df2fe9f`（mesh 相对软链接修复 `0def6aa`） |
-| 启动命令 | `gm-run X1_29_re0/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp0_1_armature --headless --max_iterations=6000` |
+| 代码仓库 | https://github.com/Lee-Weather/X1_29_re0_ada.git @ main，训练代码 commit `df2fe9f`（mesh 相对软链接修复 `0def6aa`） |
+| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp0_1_armature --headless --max_iterations=6000` |
 
 ### 6. 预期与验收
 
@@ -310,8 +311,8 @@
 | learning_rate | 1e-5（fixed） |
 | 算力 | ESKU000005（1×L20 48G，用户指定） |
 | 镜像 | BJX00000001 / V000124（isaac-gym-v19） |
-| 代码仓库 | https://github.com/Lee-Weather/X1_29_re0.git @ main，commit `2f2fe9e` |
-| 启动命令 | `gm-run X1_29_re0/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp0_2_lat_vel --headless --max_iterations=3000 --resume --load_run exp0_1_cloud --checkpoint 6000` |
+| 代码仓库 | https://github.com/Lee-Weather/X1_29_re0_ada.git @ main，commit `2f2fe9e` |
+| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp0_2_lat_vel --headless --max_iterations=3000 --resume --load_run exp0_1_cloud --checkpoint 6000` |
 
 **续训说明**：奖励结构新增一项导致 value 目标变化，lr=1e-5 足够小可平稳过渡；checkpoint 元数据由 `flux task model list`（TASK_20260828_129）获取，不猜测路径。
 
@@ -328,6 +329,132 @@
 | 不摔倒 | ✅ | ✅ | 中途摔倒 |
 
 **风险预案**：若续训后跟踪回退 >15%，说明 lat_vel 权重过大，回退权重至 -0.3 重训；若漂移方向翻转或幅值不变，检查 `feet_distance` 是否被步态频率约束顶住（对比 foot_z/接触力相移）。
+
+### 7. 实验结果
+
+> 待训练完成后补充。
+
+---
+
+## 实验 exp1.0：速度域聚焦 [-0.2, 0.6] + 参考轨迹迈步幅度速度自适应（阶段1 首次尝试）
+
+### 1. 上一实验结果与教训
+
+> 数据：exp0.1 训练日志 + `czy/data/exp0.1/isaac_diag.csv`；exp0.2 训练中（TASK_20260831_027）
+> - exp0.1 稳态跟踪 **99%（0.594 m/s @ cmd 0.6）**，Mean reward 147~153，ep_len 2214~2319，不摔倒（✅）
+> - 但仅验收了 0.6 m/s 单一速度点；训练指令 `lin_vel_x ∈ [-0.4, 1.2]` 均匀采样，全域（尤其后退 -0.2 与低速 0.2）从未验收
+> - 遗留：侧向 |vy|=0.154（exp0.2 lat_vel 惩罚处理中）；偏航漂移 -8.6°
+>
+> **核心教训**：
+> - 代码审查证实：`compute_ref_state` 的摆动幅度为**固定值**（`final_swing_joint_delta_pos` 恒定）+ 固定步频（`cycle_time=0.7s`），与指令速度**无关**——固定摆幅只在 ~0.6 m/s 一个速度点与指令匹配（exp0.1 的 99% 恰在此点），低速段参考步态"迈大步"、高速段"迈小步"，全域跟踪无参考支撑
+> - 旧域上界 1.2 m/s 需要的摆幅约为当前标称的 2 倍，超出参考步态能力；聚焦部署域 [-0.2, 0.6] 与参考能力对齐
+> - **curriculum 陷阱**：`update_command_curriculum` 在跟踪 reward >80% 上限时自动将 `lin_vel_x` 范围向外扩（下界 -0.25/次、上界 +0.5/次，直至 ±max_curriculum=1.5）。只改 ranges 不关 `commands.curriculum`，收窄会被训练过程冲掉
+> - 本轮要解决的具体问题：参考轨迹摆幅随速度自适应 + 指令域聚焦部署速度范围 + 全速度域验收
+
+### 2. 本轮修改目标
+
+- 目标1：指令域聚焦 `lin_vel_x ∈ [-0.2, 0.6]`（部署速度域，含后退），并关闭指令 curriculum 保证域不再漂移
+- 目标2：参考轨迹迈步幅度随 |vx_cmd| 线性自适应（sagittal 关节 × step_scale），低速小步、高速大步，步频保持 0.7s 不变
+- 目标3：全速度域阶梯验收（-0.2 / 0.2 / 0.4 / 0.6 m/s），替代以往单点验收
+- 验收标准：各档稳态跟踪 ≥ 80%（0.6 档）或稳态误差 ≤ 0.15 m/s（低速档）；Mean reward ≥ 120；ep_len ≥ 2100；全程不摔倒；站立段净侧漂 |mean vy| ≤ 0.03（继承 exp0.2 验收）
+
+### 3. 修改内容
+
+### 修改一：指令域聚焦 + 关闭指令 curriculum（核心前置）
+
+| 参数 | 旧值 | 新值 | 说明 |
+| --- | --- | --- | --- |
+| `commands.ranges.lin_vel_x` | [-0.4, 1.2] | **[-0.2, 0.6]** | 部署速度域；样本密度从 1.6 m/s 带宽集中到 0.8 m/s，翻倍 |
+| `commands.curriculum` | True | **False** | 关闭范围自动扩张；否则训练中 lin_vel_x 会被扩回 ±1.5 上限，域聚焦失效 |
+
+**理由**：exp0 根因分析指出 [-0.4, 1.2] 均匀采样导致 0.6 处样本密度有限；上界 1.2 超出固定参考步态能力。收窄到 [-0.2, 0.6] 后 0.6 处密度 ×2。curriculum 关闭是必要配套——`update_command_curriculum`（base legged_robot.py L823）在跟踪良好时每 episode 将下界 -0.25、上界 +0.5 逐步外扩。
+
+### 修改二：参考轨迹迈步幅度速度自适应（核心）
+
+| 参数 | 旧值 | 新值 | 说明 |
+| --- | --- | --- | --- |
+| `compute_ref_state` 摆幅 | 固定 `final_swing_joint_delta_pos[i]` | sagittal 关节（idx 0/3/4/6/9/10）× `step_scale`（逐 env） | 摆幅随指令速度缩放；roll/yaw 关节（1/2/5/7/8/11）保持固定（额状面稳定性/足尖朝向与前进速度弱相关） |
+| `rewards.ref_vel_nominal`（新增） | — | **0.6** | 标称锚点速度：当前固定摆幅对应的匹配速度（exp0.1 验证 99% 跟踪的点） |
+| `rewards.ref_step_scale_min`（新增） | — | **0.3** | 低速下限，避免摆幅过小陷入摩擦死区（cmd 0.2 → scale 0.33 恰在下限之上） |
+| `rewards.ref_step_scale_max`（新增） | — | **1.2** | 高速上限（当前域内 |vx|≤0.6 → scale≤1.0，上限仅留安全裕量） |
+
+**step_scale 定义**：`step_scale = clamp(|vx_cmd| / ref_vel_nominal, s_min, s_max)`，逐 env 张量。
+
+**几何自洽性**：步频固定 2/0.7 = 2.857 步/s。步长 ≈ k·摆幅（k 为腿长几何因子），摆幅 × s 且 v_target ∝ s（由定义 s = v/0.6），故"参考步长-速度"关系自动线性自洽：0.6 m/s → 步长 ~0.21 m（锚点，exp0.1 实测匹配）；0.2 m/s → ~0.07 m；-0.2 m/s → ~0.07 m（sin 步态前后对称，后退天然支持，但**后退从未验收过**，列为重点观察项）。
+
+**实现要点**（`compute_ref_state`）：
+
+```python
+step_scale = (self.commands[:, 0].abs() / self.cfg.rewards.ref_vel_nominal).clamp(
+    self.cfg.rewards.ref_step_scale_min, self.cfg.rewards.ref_step_scale_max)  # (num_envs,)
+d = self.cfg.rewards.final_swing_joint_delta_pos
+# 左腿 sagittal：0=hip_pitch, 3=knee, 4=ankle_pitch
+self.ref_dof_pos[:, 0] = -sin_pos_l * d[0] * step_scale
+self.ref_dof_pos[:, 3] = -sin_pos_l * d[3] * step_scale
+self.ref_dof_pos[:, 4] = -sin_pos_l * d[4] * step_scale
+# 右腿 sagittal：6=hip_pitch, 9=knee, 10=ankle_pitch
+self.ref_dof_pos[:, 6] = sin_pos_r * d[6] * step_scale
+self.ref_dof_pos[:, 9] = sin_pos_r * d[9] * step_scale
+self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
+# roll/yaw 关节（1/2/5/7/8/11）维持原固定 delta 写法不变
+```
+
+**配套一致性**（无需额外改动，自动成立）：
+- 观测已含 `sin_pos/cos_pos`（相位）与 `commands[:,:3]×scale`（速度指令）→ 策略可由 vx 指令预判摆幅，参考可观测
+- `ref_joint_pos` 奖励直接用 `ref_dof_pos` → 惩罚自动一致
+- `_get_stance_mask`/`feet_contact_number` 只依赖相位（步频不变）→ 占空比不变
+- 站立段（|cmd|<0.05）`sw_switch` 已冻结相位 → step_scale 不影响站立
+
+### 修改三：回放验收速度阶梯扩展（工具，不影响训练）
+
+| 参数 | 旧值 | 新值 | 说明 |
+| --- | --- | --- | --- |
+| play 速度阶梯 | 0→0.6→0（各 10s） | **0→0.2→0.4→0.6→-0.2→0**（各 10s） | 全速度域验收，含后退档；分段统计沿用 isaac_diag.csv |
+
+### 4. 修改文件
+
+- `humanoid/envs/x1/x1_dh_stand_config.py`：修改一（commands 段）+ 修改二（rewards 段新增 3 参数）
+- `humanoid/envs/x1/x1_dh_stand_env.py`：修改二（`compute_ref_state` 增加 step_scale）
+- `humanoid/scripts/play.py`：修改三（速度阶梯）
+
+### 5. 训练参数
+
+| 参数 | 值 |
+| --- | --- |
+| 训练方式 | 从零（指令域+参考轨迹双改动，分布变化大，不用续训） |
+| GM账号 | limxmtcm4nrkwbk70j@emalupe.com（计划沿用，额度不足再轮换） |
+| max_iterations | 6000 |
+| save_interval | 100 |
+| num_envs | 4096 |
+| seed | 5 |
+| learning_rate | 1e-5（fixed） |
+| 算力 | 待定（exp0.1 用 ESKU000001 1×4090D，exp0.2 用 ESKU000005 1×L20；开训前确认） |
+| 镜像 | BJX00000001 / V000124（isaac-gym-v19） |
+| 代码仓库 | https://github.com/Lee-Weather/X1_29_re0_ada.git @ main，commit `140010d`（速度域聚焦 + step_scale 自适应摆幅 + 阶梯回放） |
+| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp1_0_vel_adaptive --headless --max_iterations=6000` |
+
+**继承说明**：config 已含 exp0.2 的 `lat_vel=-0.6`、`feet_distance=0.3` 与 exp0.1 的逐关节 armature，本轮从零训练全部继承。
+
+### 6. 预期与验收
+
+**目标指标**（回放 model_6000，阶梯 0→0.2→0.4→0.6→-0.2→0）：
+
+| 指标 | exp0.1（仅 0.6 档） | 本轮目标 | 异常信号 |
+| --- | --- | --- | --- |
+| 0.6 m/s 稳态跟踪 | 99% | ≥ 80% | < 70% |
+| 0.4 m/s 稳态误差 | 未验收 | ≤ 0.15 m/s | > 0.25 |
+| 0.2 m/s 稳态误差 | 未验收 | ≤ 0.15 m/s | > 0.25（疑似摩擦死区/摆幅下限顶住） |
+| -0.2 m/s 稳态误差 | 未验收（后退首次） | ≤ 0.20 m/s | 无法后退/摔倒是转 |
+| Mean reward | 147~153 | ≥ 120 | < 100 |
+| Mean episode length | 2214~2319 | ≥ 2100 | < 1500 |
+| 站立段净侧漂 | -0.094（exp0.1） | \|mean\| ≤ 0.03（继承 exp0.2 验收） | > 0.06 |
+| 全程不摔倒/起停正常 | ✅ | ✅ | 中途摔倒 |
+
+**风险预案**：
+- 低速档误差大：`ref_step_scale_min` 0.3 → 0.4（接受"参考比指令略大"的稳健小步）
+- 后退档异常：先单独回放 -0.2 观察步态方向；若策略拒绝后退，考虑后退段 phase 取反（sin→-sin）
+- 0.6 档回退 >15%：检查 step_scale 上限是否被误设 <1.0
+- reward 前期低于 exp0.1 同期：正常（参考轨迹随速度变化，探索空间更大），3000 轮后应追平
 
 ### 7. 实验结果
 
