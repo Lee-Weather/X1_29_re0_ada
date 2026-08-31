@@ -7,7 +7,7 @@
 | exp0 | 2026-08-28 | 基线：切换 physically_mirrored URDF + 右踝 pitch 符号修复后本机从零训练 6000 轮；回放全程稳定行走、起停正常，速度跟踪 71% 未达标 | ⚠️部分达标（已测试） | 本机训练（RTX A6000） | 无（本机训练） | model_6000.pt |
 | exp0.1 | 2026-08-28 | 逐关节 armature 对齐真机阶跃辨识（膝 0.25 / 髋Pitch 0.16 / 髋Yaw 逐侧），Flux 云端从零 6000 轮；回放稳态跟踪 99%（exp0 为 71%），达标 | ✅达标（已测试） | TASK_20260828_129 | limxmtcm4nrkwbk70j@emalupe.com | model_6000.pt |
 | exp0.2 | 2026-08-31 | 侧向速度抑制：新增 lat_vel 线性惩罚 + feet_distance 0.2→0.3，从 exp0.1 ckpt6000 云端续训 3000 轮；站立净漂移 -0.094→±0.002 消除 ✅，稳态 \|vy\| 0.126~0.136 略超 0.12 ⚠️，0.6 档跟踪 104% | ⚠️部分达标（已测试） | TASK_20260831_027 | limxmtcm4nrkwbk70j@emalupe.com | model_8999.pt |
-| exp1.0 | 2026-08-31 | 速度域聚焦 [-0.2,0.6]+关闭指令 curriculum；参考轨迹迈步幅度随 \|vx_cmd\| 线性自适应（sagittal 摆幅 × step_scale，标称锚点 0.6 m/s）；云端从零 6000 轮 | ⏸️待训练（两次提交均人工停止，未开训） | TASK_20260831_116 | limxmtcm4nrkwbk70j@emalupe.com | 待定 |
+| exp_ada_1 | 2026-08-31 | 跨版本系列首训：速度域聚焦 [-0.2,0.6]+关闭指令 curriculum+参考摆幅速度自适应（sagittal × step_scale）+**URDF 切回 X1_12DOF 旧约定**；新账号 L20 从零 6000 轮 | 🔄待启动 | 待创建 | limxmtcm5s0yriv75d@emalupe.com | 待定 |
 
 ---
 
@@ -395,7 +395,9 @@
 
 ---
 
-## 实验 exp1.0：速度域聚焦 [-0.2, 0.6] + 参考轨迹迈步幅度速度自适应（阶段1 首次尝试）
+## 实验 exp_ada_1：速度域聚焦 [-0.2, 0.6] + 参考轨迹迈步幅度速度自适应 + URDF 切回旧约定（跨版本系列首训）
+
+> 编号说明：应用户要求启用跨版本新命名 `exp_ada_1`（X1_29_re0 → X1_29_re0_ada），不沿用 exp{n} 编号规则。本节方案由 exp1.0（旧账号两次提交 TASK_20260831_114/116 均人工停止、未开训）演进而来，新增 URDF 切换。
 
 ### 1. 上一实验结果与教训
 
@@ -464,7 +466,17 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 - `_get_stance_mask`/`feet_contact_number` 只依赖相位（步频不变）→ 占空比不变
 - 站立段（|cmd|<0.05）`sw_switch` 已冻结相位 → step_scale 不影响站立
 
-### 修改三：回放验收速度阶梯扩展（工具，不影响训练）
+### 修改三：URDF 切回旧约定 X1_12DOF（exp0 修改一/二的逆操作）
+
+| 参数 | 旧值 | 新值 | 说明 |
+| --- | --- | --- | --- |
+| `asset.file` | `X1_12DOF_physically_mirrored.urdf` | **`X1_12DOF.urdf`** | 右踝 pitch 轴 `0 0 -1` → `0 0 1`（与左踝反向），与 MJCF（xyber_x1_serial.xml 右踝轴 0 0 1）约定一致；mesh 走 `../meshes/` 已存在，无需软链接 |
+| `default_joint_angles['right_ankle_pitch_joint']` | +0.21 | **-0.21** | 轴翻转的逆变换，物理位姿不变 |
+| `final_swing_joint_delta_pos[10]` | +0.16 | **-0.16** | 参考摆动符号回退；左右 delta 同为 -0.16，经相位取正/取负后 ref 左正右负，物理摆动对称 |
+
+**理由**：用户决策切回旧 URDF 约定。副作用：与 exp0.1/exp0.2 的 checkpoint（新约定训练）不兼容，不可续训/回放旧模型——本实验从零训练，无影响。真机部署时 dof10 需在推理端再做符号映射（post-201-5 记录真机约定与 mirrored URDF 一致）。
+
+### 修改四：回放验收速度阶梯扩展（工具，不影响训练）
 
 | 参数 | 旧值 | 新值 | 说明 |
 | --- | --- | --- | --- |
@@ -480,17 +492,17 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 
 | 参数 | 值 |
 | --- | --- |
-| 训练方式 | 从零（指令域+参考轨迹双改动，分布变化大，不用续训） |
-| GM账号 | limxmtcm4nrkwbk70j@emalupe.com（计划沿用，额度不足再轮换） |
+| 训练方式 | 从零（指令域+参考轨迹+URDF 三重改动，分布变化大，不用续训） |
+| GM账号 | limxmtcm5s0yriv75d@emalupe.com（新账号，公开仓库无需平台 Git 凭证） |
 | max_iterations | 6000 |
 | save_interval | 100 |
 | num_envs | 4096 |
 | seed | 5 |
 | learning_rate | 1e-5（fixed） |
-| 算力 | ESKU000005（1×L20 48G，¥8.31/h）——首次提交 TASK_20260831_114（4090D）已停止，按用户要求改用 L20 重提 |
+| 算力 | ESKU000005（1×L20 48G，用户指定；历史：旧账号 TASK_20260831_114 4090D / TASK_20260831_116 L20 均已停止未开训） |
 | 镜像 | BJX00000001 / V000124（isaac-gym-v19） |
-| 代码仓库 | https://github.com/Lee-Weather/X1_29_re0_ada.git @ main，commit `140010d`（速度域聚焦 + step_scale 自适应摆幅 + 阶梯回放） |
-| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp1_0_vel_adaptive --headless --max_iterations=6000` |
+| 代码仓库 | https://github.com/Lee-Weather/X1_29_re0_ada.git @ main，commit 见下方启动说明 |
+| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp_ada_1 --headless --max_iterations=6000` |
 
 **继承说明**：config 已含 exp0.2 的 `lat_vel=-0.6`、`feet_distance=0.3` 与 exp0.1 的逐关节 armature，本轮从零训练全部继承。
 
