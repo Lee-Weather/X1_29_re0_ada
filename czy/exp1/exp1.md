@@ -7,7 +7,7 @@
 | exp0 | 2026-08-28 | 基线：切换 physically_mirrored URDF + 右踝 pitch 符号修复后本机从零训练 6000 轮；回放全程稳定行走、起停正常，速度跟踪 71% 未达标 | ⚠️部分达标（已测试） | 本机训练（RTX A6000） | 无（本机训练） | model_6000.pt |
 | exp0.1 | 2026-08-28 | 逐关节 armature 对齐真机阶跃辨识（膝 0.25 / 髋Pitch 0.16 / 髋Yaw 逐侧），Flux 云端从零 6000 轮；回放稳态跟踪 99%（exp0 为 71%），达标 | ✅达标（已测试） | TASK_20260828_129 | limxmtcm4nrkwbk70j@emalupe.com | model_6000.pt |
 | exp0.2 | 2026-08-31 | 侧向速度抑制：新增 lat_vel 线性惩罚 + feet_distance 0.2→0.3，从 exp0.1 ckpt6000 云端续训 3000 轮 | 🔄训练中 | TASK_20260831_027 | limxmtcm4nrkwbk70j@emalupe.com | 继承 TASK_20260828_129 model_6000 |
-| exp1.0 | 2026-08-31 | 速度域聚焦 [-0.2,0.6]+关闭指令 curriculum；参考轨迹迈步幅度随 \|vx_cmd\| 线性自适应（sagittal 摆幅 × step_scale，标称锚点 0.6 m/s）；云端从零 6000 轮 | 🔄训练中 | TASK_20260831_116 | limxmtcm4nrkwbk70j@emalupe.com | 待定 |
+| exp1.0 | 2026-08-31 | 速度域聚焦 [-0.2,0.6]+关闭指令 curriculum；参考轨迹迈步幅度随 \|vx_cmd\| 线性自适应（sagittal 摆幅 × step_scale，标称锚点 0.6 m/s）；云端从零 6000 轮 | ⏸️待训练（两次提交均人工停止，未开训） | TASK_20260831_116 | limxmtcm4nrkwbk70j@emalupe.com | 待定 |
 
 ---
 
