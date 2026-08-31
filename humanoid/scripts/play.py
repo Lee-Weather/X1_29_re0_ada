@@ -54,10 +54,14 @@ x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 0.0, 0.0, 0.0
 joystick_use = True
 joystick_opened = False
 
-# =========== 速度阶梯（50Hz 控制步数, command_x [m/s]）：0 → 0.6 → 0 ===========
+# =========== 速度阶梯（50Hz 控制步数, command_x [m/s]）==========
+# exp1.0: 全速度域验收 0 → 0.2 → 0.4 → 0.6 → -0.2 → 0（各 10s，含后退档）
 VEL_PROFILE = [
     (500, 0.0),   # 站立 10s
-    (500, 0.6),   # 前进 10s
+    (500, 0.2),   # 低速前进 10s（摩擦死区观察档）
+    (500, 0.4),   # 中速前进 10s
+    (500, 0.6),   # 高速前进 10s（exp0.1 锚点档）
+    (500, -0.2),  # 后退 10s（首次验收）
     (500, 0.0),   # 减速停止 10s
 ]
 TOTAL_PLAY_STEPS = sum(steps for steps, _ in VEL_PROFILE)

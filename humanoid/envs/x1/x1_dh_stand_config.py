@@ -279,7 +279,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         joint_viscous_range = [0.05, 0.1]
         
     class commands(LeggedRobotCfg.commands):
-        curriculum = True
+        curriculum = False  # exp1.0: 关闭指令课程，否则 update_command_curriculum 会把 lin_vel_x 范围自动扩回 ±max_curriculum
         max_curriculum = 1.5
         # Vers: lin_vel_x, lin_vel_y, ang_vel_yaw, heading (in heading mode ang_vel_yaw is recomputed from heading error)
         num_commands = 4
@@ -297,7 +297,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         sw_switch = True # use stand_com_threshold or not
 
         class ranges:
-            lin_vel_x = [-0.4, 1.2] # min max [m/s] 
+            lin_vel_x = [-0.2, 0.6] # min max [m/s]  exp1.0: 聚焦部署速度域（含后退），步频固定下步长∝速度
             lin_vel_y = [-0.4, 0.4]   # min max [m/s]
             ang_vel_yaw = [-0.6, 0.6]    # min max [rad/s]
             heading = [-3.14, 3.14]
@@ -317,6 +317,11 @@ class X1DHStandCfg(LeggedRobotCfg):
         target_feet_height_max = 0.06
         feet_to_ankle_distance = 0.041
         cycle_time = 0.7
+        # exp1.0: 参考轨迹迈步幅度速度自适应（仅 sagittal 关节缩放，roll/yaw 固定）
+        # step_scale = clamp(|vx_cmd| / ref_vel_nominal, ref_step_scale_min, ref_step_scale_max)
+        ref_vel_nominal = 0.6      # 锚点：固定摆幅匹配的速度（exp0.1 实证 99% 跟踪点），scale=1 保持基线行为
+        ref_step_scale_min = 0.3   # 低速下限（≈0.18 m/s），防参考步长落入摩擦死区
+        ref_step_scale_max = 1.2   # 高速上限，当前域内不触发，仅安全裕量
         # if true negative total rewards are clipped at zero (avoids early termination problems)
         only_positive_rewards = True
         # tracking reward = exp(-error*sigma)

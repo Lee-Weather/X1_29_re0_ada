@@ -278,22 +278,27 @@ class X1DHStandEnv(LeggedRobot):
         sin_pos_r = sin_pos.clone()
 
         self.ref_dof_pos = torch.zeros_like(self.dof_pos)
+        # exp1.0: 迈步幅度速度自适应——步频固定(cycle_time)，步长∝速度，
+        # 故 sagittal 摆幅按 |vx_cmd| 线性缩放；roll/yaw 与速度弱相关，保持固定
+        step_scale = (self.commands[:, 0].abs() / self.cfg.rewards.ref_vel_nominal).clamp(
+            self.cfg.rewards.ref_step_scale_min, self.cfg.rewards.ref_step_scale_max)
+        d = self.cfg.rewards.final_swing_joint_delta_pos
         # left swing
         sin_pos_l[sin_pos_l > 0] = 0
-        self.ref_dof_pos[:, 0] = -sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[0]
-        self.ref_dof_pos[:, 1] = -sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[1]
-        self.ref_dof_pos[:, 2] = -sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[2]
-        self.ref_dof_pos[:, 3] = -sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[3]
-        self.ref_dof_pos[:, 4] = -sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[4]
-        self.ref_dof_pos[:, 5] = -sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[5]
+        self.ref_dof_pos[:, 0] = -sin_pos_l * d[0] * step_scale  # L hip_pitch
+        self.ref_dof_pos[:, 1] = -sin_pos_l * d[1]
+        self.ref_dof_pos[:, 2] = -sin_pos_l * d[2]
+        self.ref_dof_pos[:, 3] = -sin_pos_l * d[3] * step_scale  # L knee_pitch
+        self.ref_dof_pos[:, 4] = -sin_pos_l * d[4] * step_scale  # L ankle_pitch
+        self.ref_dof_pos[:, 5] = -sin_pos_l * d[5]
         # right
         sin_pos_r[sin_pos_r < 0] = 0
-        self.ref_dof_pos[:, 6] = sin_pos_r *  self.cfg.rewards.final_swing_joint_delta_pos[6]
-        self.ref_dof_pos[:, 7] = sin_pos_r *  self.cfg.rewards.final_swing_joint_delta_pos[7]
-        self.ref_dof_pos[:, 8] = sin_pos_r *  self.cfg.rewards.final_swing_joint_delta_pos[8]
-        self.ref_dof_pos[:, 9] = sin_pos_r *  self.cfg.rewards.final_swing_joint_delta_pos[9]
-        self.ref_dof_pos[:, 10] = sin_pos_r * self.cfg.rewards.final_swing_joint_delta_pos[10]
-        self.ref_dof_pos[:, 11] = sin_pos_r * self.cfg.rewards.final_swing_joint_delta_pos[11]
+        self.ref_dof_pos[:, 6] = sin_pos_r * d[6] * step_scale   # R hip_pitch
+        self.ref_dof_pos[:, 7] = sin_pos_r * d[7]
+        self.ref_dof_pos[:, 8] = sin_pos_r * d[8]
+        self.ref_dof_pos[:, 9] = sin_pos_r * d[9] * step_scale   # R knee_pitch
+        self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale # R ankle_pitch
+        self.ref_dof_pos[:, 11] = sin_pos_r * d[11]
 
         self.ref_dof_pos[torch.abs(sin_pos) < 0.1] = 0.
         
