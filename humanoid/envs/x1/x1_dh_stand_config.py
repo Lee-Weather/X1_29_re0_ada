@@ -147,7 +147,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         stiffness = {'hip_pitch_joint': 30, 'hip_roll_joint': 40,'hip_yaw_joint': 35,
                      'knee_pitch_joint': 100, 'ankle_pitch_joint': 35, 'ankle_roll_joint': 35}
         damping = {'hip_pitch_joint': 3, 'hip_roll_joint': 3.0,'hip_yaw_joint': 4, 
-                   'knee_pitch_joint': 10, 'ankle_pitch_joint': 0.5, 'ankle_roll_joint': 0.5}
+                   'knee_pitch_joint': 8, 'ankle_pitch_joint': 1.5, 'ankle_roll_joint': 1.5}
 
         # action scale: target angle = actionScale * action + defaultAngle
         action_scale = 0.5
@@ -238,16 +238,17 @@ class X1DHStandCfg(LeggedRobotCfg):
         randomize_joint_armature = True
         randomize_joint_armature_each_joint = True  # 必须开启，否则逐关节范围不生效
         joint_armature_range = [0.0001, 0.05]     # 统一回退值（each_joint=False 时使用）
-        joint_1_armature_range = [0.09, 0.23]     # L hip pitch (id 0.196)
+        # exp_ada_1: M_ii 在 X1_12DOF.urdf 上重算（0.225/0.027/0.088，替换 mirrored 基准 0.271/0.031/0.113），armature = 辨识J - M_ii
+        joint_1_armature_range = [0.14, 0.28]     # L hip pitch (id 0.467 - 0.225 = 0.242, symmetrized c0.21)
         joint_2_armature_range = [0.0001, 0.05]   # L hip roll (id unreliable)
-        joint_3_armature_range = [0.003, 0.018]   # L hip yaw (id 0.0148)
-        joint_4_armature_range = [0.18, 0.32]     # L knee (id 0.250) CORE
+        joint_3_armature_range = [0.006, 0.022]   # L hip yaw (id 0.046 - 0.027 = 0.019)
+        joint_4_armature_range = [0.22, 0.32]     # L knee (id 0.363 - 0.088 = 0.274) CORE
         joint_5_armature_range = [0.0001, 0.05]   # L ankle pitch (no data)
         joint_6_armature_range = [0.0001, 0.05]   # L ankle roll (no data)
-        joint_7_armature_range = [0.09, 0.23]     # R hip pitch (id 0.129, symmetrized)
+        joint_7_armature_range = [0.14, 0.28]     # R hip pitch (id 0.399 - 0.225 = 0.174, symmetrized)
         joint_8_armature_range = [0.0001, 0.05]   # R hip roll (id unreliable)
-        joint_9_armature_range = [0.003, 0.018]   # R hip yaw (id 0.0060)
-        joint_10_armature_range = [0.18, 0.32]    # R knee (id 0.246) CORE
+        joint_9_armature_range = [0.006, 0.022]   # R hip yaw (id 0.037 - 0.027 = 0.010)
+        joint_10_armature_range = [0.22, 0.32]    # R knee (id 0.360 - 0.088 = 0.271) CORE
         joint_11_armature_range = [0.0001, 0.05]  # R ankle pitch (added: each_joint loops 12)
         joint_12_armature_range = [0.0001, 0.05]  # R ankle roll (added)
 

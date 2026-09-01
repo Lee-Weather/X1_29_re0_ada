@@ -7,7 +7,7 @@ description: "通过 SSH 把整个项目传输到远程服务器 10.12.201.5 的
 
 ## 适用范围
 
-把本地项目 `agibot_x1_train-runner` 通过 SSH 发送到远程服务器，并在远程启动训练：
+把本地项目 `X1_29_re0_ada` 通过 SSH 发送到远程服务器，并在远程启动训练：
 
 - 传输：本地 → `robot@10.12.201.5:~/czy/exp1/exp_<时间戳>/`（每次传输生成新时间戳目录）
 - 远程训练：`conda activate F1` → `pip install -e .` → `python humanoid/scripts/train.py ...`
@@ -23,11 +23,11 @@ description: "通过 SSH 把整个项目传输到远程服务器 10.12.201.5 的
 | 登录认证 | 已配 SSH 密钥免密，见本机 `~/.ssh`；如需密码登录请手动输入，不在此记录 |
 | SSH 端口 | `22` |
 | 远程目标目录 | `~/czy/exp1/exp_<YYYYMMDD_HHMMSS>/`（**动态创建**，每次传输生成新时间戳目录）|
-| 本地源目录 | 项目根 `agibot_x1_train-runner` |
+| 本地源目录 | 项目根 `X1_29_re0_ada` |
 | 远程 conda 安装路径 | `/home/robot/Anaconda`（**实测确认**，非 miniconda3/anaconda3）|
 | conda 初始化脚本 | `/home/robot/Anaconda/etc/profile.d/conda.sh` |
 | conda 环境 | `F1`（Python 3.8.20）|
-| 训练日志文件 | `~/czy/exp1/exp_<时间戳>/agibot_x1_train-runner/train_test_20_video.log` |
+| 训练日志文件 | `~/czy/exp1/exp_<时间戳>/X1_29_re0_ada/train_test_20_video.log` |
 | 训练命令 | `python humanoid/scripts/train.py --task=x1_dh_stand --run_name=test_20_video --resume --headless --load_run 2026-01-14_09-58-10test_20_video --checkpoint 6000` |
 
 > **时间戳格式**：`exp_20260605_143025` 表示 2026年6月5日 14:30:25 创建的实验目录。
@@ -99,7 +99,7 @@ rsync -avz -e "ssh -p 22 -o BatchMode=yes -o StrictHostKeyChecking=no" \
   --exclude='czy/data/' \
   --exclude='*.mp4' --exclude='.git/' \
   --exclude='__pycache__/' --exclude='*.pyc' --exclude='*.log' \
-  /mnt/e/X1/real_test/exp1/agibot_x1_train-runner \
+  X1_29_re0_ada \
   robot@10.12.201.5:/home/robot/czy/exp1/$timestamp/
 ```
 > WSL 路径用 `/mnt/e/...`，Git-Bash 用 `/e/...`。rsync 增量同步，重复传输只发送变化文件。
@@ -108,11 +108,11 @@ rsync -avz -e "ssh -p 22 -o BatchMode=yes -o StrictHostKeyChecking=no" \
 scp 无法在传输时排除子目录，需先在本地准备一个不含排除项的临时副本再传，或接受全量传输后**在远程删除**不需要的目录：
 ```powershell
 # 全量传输（含 skills/、czy/data/，会多传无关文件）
-scp -r -P 22 -o BatchMode=yes -o StrictHostKeyChecking=no "e:\X1\real_test\exp1\agibot_x1_train-runner" robot@10.12.201.5:/home/robot/czy/exp1/$timestamp/
+scp -r -P 22 -o BatchMode=yes -o StrictHostKeyChecking=no /home/robot/czy/X1_29_re0_ada robot@10.12.201.5:/home/robot/czy/exp1/$timestamp/
 ```
 ```bash
 # 传完后清理远程的非训练/含凭据目录（重要：含 skills 凭据文档）
-ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "rm -rf ~/czy/exp1/$timestamp/agibot_x1_train-runner/skills ~/czy/exp1/$timestamp/agibot_x1_train-runner/czy/data && echo CLEANED"
+ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "rm -rf ~/czy/exp1/$timestamp/X1_29_re0_ada/skills ~/czy/exp1/$timestamp/X1_29_re0_ada/czy/data && echo CLEANED"
 ```
 > ⚠️ scp 回退方案必须执行远程清理，否则 `skills/`（含凭据/文档）会残留在服务器上。
 > 项目核心约 75MB，排除 `czy/data/` 与 `skills/` 后更小。
@@ -120,21 +120,21 @@ ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "rm -rf ~/czy/exp1/$timestamp/agibo
 ### 第 4 步：传输后验证（注意 checkpoint 含 exported_data 层）
 
 ```bash
-ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "test -f ~/czy/exp1/$timestamp/agibot_x1_train-runner/humanoid/scripts/train.py && echo OK || echo MISSING; test -f ~/czy/exp1/$timestamp/agibot_x1_train-runner/logs/x1_dh_stand/exported_data/2026-01-14_09-58-10test_20_video/model_6000.pt && echo CKPT_OK || echo CKPT_MISSING"
+ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "test -f ~/czy/exp1/$timestamp/X1_29_re0_ada/humanoid/scripts/train.py && echo OK || echo MISSING; test -f ~/czy/exp1/$timestamp/X1_29_re0_ada/logs/x1_dh_stand/exported_data/2026-01-14_09-58-10test_20_video/model_6000.pt && echo CKPT_OK || echo CKPT_MISSING"
 ```
 必须同时 `OK` + `CKPT_OK` 才进入下一步。
 
 ### 第 5 步：安装依赖
 
 ```bash
-ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "source /home/robot/Anaconda/etc/profile.d/conda.sh && conda activate F1 && cd ~/czy/exp1/$timestamp/agibot_x1_train-runner && pip install -e . 2>&1 | tail -n 5"
+ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "source /home/robot/Anaconda/etc/profile.d/conda.sh && conda activate F1 && cd ~/czy/exp1/$timestamp/X1_29_re0_ada && pip install -e . 2>&1 | tail -n 5"
 ```
 预期末尾 `Successfully installed humanoid`。
 
 ### 第 6 步：后台启动训练（nohup，会本地超时属正常）
 
 ```bash
-ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "source /home/robot/Anaconda/etc/profile.d/conda.sh && conda activate F1 && cd ~/czy/exp1/$timestamp/agibot_x1_train-runner && nohup python humanoid/scripts/train.py --task=x1_dh_stand --run_name=test_20_video --resume --headless --load_run 2026-01-14_09-58-10test_20_video --checkpoint 6000 > train_test_20_video.log 2>&1 & echo STARTED_PID=\$!"
+ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "source /home/robot/Anaconda/etc/profile.d/conda.sh && conda activate F1 && cd ~/czy/exp1/$timestamp/X1_29_re0_ada && nohup python humanoid/scripts/train.py --task=x1_dh_stand --run_name=test_20_video --resume --headless --load_run 2026-01-14_09-58-10test_20_video --checkpoint 6000 > train_test_20_video.log 2>&1 & echo STARTED_PID=\$!"
 ```
 > 本地 SSH 命令会超时（前台等会话结束），但 `&` 后台进程已正常运行。**记下 PID，不要因超时重复启动**。
 
@@ -151,7 +151,7 @@ ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "source /home/robot/Anaconda/etc/pr
 ### 7.1 进程是否存活 + 日志末尾
 
 ```bash
-ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "ps aux | grep train.py | grep -v grep | grep -v 'bash -c' | head -1; echo '===== LOG ====='; tail -n 45 ~/czy/exp1/$timestamp/agibot_x1_train-runner/train_test_20_video.log"
+ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "ps aux | grep train.py | grep -v grep | grep -v 'bash -c' | head -1; echo '===== LOG ====='; tail -n 45 ~/czy/exp1/$timestamp/X1_29_re0_ada/train_test_20_video.log"
 ```
 - 进程行存在 = 训练在跑；为空 = 已结束或崩溃（查日志末尾原因）。
 - 日志关注：`Learning iteration N/总数`、`Mean reward`、`Mean episode length`。
@@ -159,7 +159,7 @@ ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "ps aux | grep train.py | grep -v g
 ### 7.2 实时跟踪日志（手动终端用，Agent 勿用，会一直阻塞）
 
 ```bash
-ssh -p 22 robot@10.12.201.5 "tail -f ~/czy/exp1/$timestamp/agibot_x1_train-runner/train_test_20_video.log"
+ssh -p 22 robot@10.12.201.5 "tail -f ~/czy/exp1/$timestamp/X1_29_re0_ada/train_test_20_video.log"
 ```
 
 ### 7.3 GPU 占用确认
@@ -171,7 +171,7 @@ ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "nvidia-smi --query-gpu=memory.used
 ### 7.4 只看当前迭代号与关键奖励（快速概览）
 
 ```bash
-ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "grep -E 'Learning iteration|Mean reward|Mean episode length|tracking_lin_vel|feet_contact_forces' ~/czy/exp1/$timestamp/agibot_x1_train-runner/train_test_20_video.log | tail -n 12"
+ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "grep -E 'Learning iteration|Mean reward|Mean episode length|tracking_lin_vel|feet_contact_forces' ~/czy/exp1/$timestamp/X1_29_re0_ada/train_test_20_video.log | tail -n 12"
 ```
 
 ### 进度判读要点
@@ -200,7 +200,7 @@ ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "kill <PID>"
 ### 8.1 启动验证脚本
 
 ```bash
-ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "source /home/robot/Anaconda/etc/profile.d/conda.sh && conda activate F1 && cd ~/czy/exp1/$timestamp/agibot_x1_train-runner && nohup python humanoid/scripts/play.py --task=x1_dh_stand --run_name=test_20_video > play_test_20_video.log 2>&1 & echo PLAY_PID=\$!"
+ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "source /home/robot/Anaconda/etc/profile.d/conda.sh && conda activate F1 && cd ~/czy/exp1/$timestamp/X1_29_re0_ada && nohup python humanoid/scripts/play.py --task=x1_dh_stand --run_name=test_20_video > play_test_20_video.log 2>&1 & echo PLAY_PID=\$!"
 ```
 
 ### 8.2 等待约 60 秒后终止进程
@@ -217,10 +217,10 @@ ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "pkill -f 'play.py' && echo PLAY_ST
 
 ```bash
 # 查看结果目录内容
-ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "ls -la ~/czy/exp1/$timestamp/agibot_x1_train-runner/personal/train-more/ 2>/dev/null || echo RESULT_DIR_MISSING"
+ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "ls -la ~/czy/exp1/$timestamp/X1_29_re0_ada/personal/train-more/ 2>/dev/null || echo RESULT_DIR_MISSING"
 
 # 查看验证日志末尾
-ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "tail -n 30 ~/czy/exp1/$timestamp/agibot_x1_train-runner/play_test_20_video.log"
+ssh -p 22 -o BatchMode=yes robot@10.12.201.5 "tail -n 30 ~/czy/exp1/$timestamp/X1_29_re0_ada/play_test_20_video.log"
 ```
 
 > **预期结果**：`/personal/train-more/` 目录下会生成训练验证相关的输出文件（如视频、日志等）。

@@ -476,7 +476,17 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 
 **理由**：用户决策切回旧 URDF 约定。副作用：与 exp0.1/exp0.2 的 checkpoint（新约定训练）不兼容，不可续训/回放旧模型——本实验从零训练，无影响。真机部署时 dof10 需在推理端再做符号映射（post-201-5 记录真机约定与 mirrored URDF 一致）。
 
-### 修改四：回放验收速度阶梯扩展（工具，不影响训练）
+### 修改四：armature 重对齐旧 URDF 的 M_ii（数值验证后修正）
+
+| 参数 | 旧值 | 新值 | 说明 |
+| --- | --- | --- | --- |
+| `joint_1/7_armature_range`（双髋Pitch） | [0.09, 0.23] c0.16 | **[0.14, 0.28] c0.21** | 所需 0.242(L)/0.174(R)，旧范围左侧够不到上限 |
+| `joint_3/9_armature_range`（双髋Yaw） | [0.003, 0.018] c0.011 | **[0.006, 0.022] c0.014** | 所需 0.019(L)/0.010(R)，左略超旧上限 |
+| `joint_4/10_armature_range`（双膝） | [0.18, 0.32] c0.25 | **[0.22, 0.32] c0.27** | 所需 0.274/0.271，中心上移对齐 |
+
+**理由**：辨识文档 §12 的 M_ii 列（0.271/0.031/0.113）在 perfect_mirrored URDF 上计算，换回 X1_12DOF.urdf 后实算 M_ii 为 0.225/0.027/0.088（子树复合惯量投影法，与文档 exp_011_1 校准值 0.211/0.368/0.0237/0.0812 交叉验证偏差 7~12%），armature=J辨识−M_ii 基准偏移导致有效惯量整体低于真机（髋Pitch 左 -18%、膝 -7%）。实算同时确认旧 URDF 下肢 L/R M_ii 差 ≤0.3%，保持左右对称 armature 无需拆分。髋 Roll 无可靠辨识，维持 [0.0001, 0.05]。
+
+### 修改五：回放验收速度阶梯扩展（工具，不影响训练）
 
 | 参数 | 旧值 | 新值 | 说明 |
 | --- | --- | --- | --- |
@@ -499,7 +509,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 | num_envs | 4096 |
 | seed | 5 |
 | learning_rate | 1e-5（fixed） |
-| 算力 | ESKU000005（1×L20 48G，用户指定；历史：旧账号 TASK_20260831_114 4090D / TASK_20260831_116 L20 均已停止未开训） |
+| 算力 | ESKU000001（1×4090D 24G，¥5.4/h，用户指定；此前 L20/4090D 多次提交均排队或被人工停止，未实际训完） |
 | 镜像 | BJX00000001 / V000124（isaac-gym-v19） |
 | 代码仓库 | https://github.com/Lee-Weather/X1_29_re0_ada.git @ main，commit `c019a0c`（速度域聚焦 + step_scale 自适应摆幅 + 阶梯回放 + URDF 切回旧约定） |
 | 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp_ada_1 --headless --max_iterations=6000` |
