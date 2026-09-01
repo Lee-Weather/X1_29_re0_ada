@@ -365,6 +365,10 @@ class X1DHStandEnv(LeggedRobot):
         phase = self._get_phase()
         self.compute_ref_state()
 
+        # exp_ada_1.1 修改六: 滚动记录右腿关节角（gait_symmetry 奖励经 sym_hist[:, -1] 取半周期前值）
+        self.sym_hist = torch.roll(self.sym_hist, 1, dims=1)
+        self.sym_hist[:, 0] = self.dof_pos[:, 6:12]
+
         sin_pos = torch.sin(2 * torch.pi * phase).unsqueeze(1)
         cos_pos = torch.cos(2 * torch.pi * phase).unsqueeze(1)
 
@@ -569,6 +573,11 @@ class X1DHStandEnv(LeggedRobot):
         self.phase_length_buf = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.long)
         self.gait_start = torch.randint(0, 2, (self.num_envs,)).to(self.device)*0.5
+        # exp_ada_1.1 修改六: 右腿6关节角历史缓冲，供 gait_symmetry 奖励取半周期前的右腿状态
+        # 半周期 = cycle_time/2 = 0.35s，控制步长 = sim.dt * decimation = 0.01s → 35 步
+        self.sym_half_steps = int(self.cfg.rewards.cycle_time / 2 /
+                                  (self.cfg.sim.dt * self.cfg.control.decimation))
+        self.sym_hist = torch.zeros(self.num_envs, self.sym_half_steps, 6, device=self.device)
 
 # ================================================ Rewards ================================================== #
     def _reward_ref_joint_pos(self):
@@ -584,6 +593,17 @@ class X1DHStandEnv(LeggedRobot):
         r[stand_command] = 1.0
         return r
     
+    def _reward_gait_symmetry(self):
+        """exp_ada_1.1 修改六: 左右步态镜像对称奖励（判别实验假设 B 对策）。
+        2026-09-01 FK 实测镜像关系: hip_pitch/roll/yaw 左右物理反向(S=-1),
+        knee/ankle_pitch 同向(S=+1), ankle_roll 反向(S=-1)。
+        diff = q_L(t) - S * q_R(t - T/2)；站立段两侧均在 default(镜像), diff≈0, 奖励自然≈1。
+        结构与 _reward_ref_joint_pos 同构: exp 项 + 线性尾刺防躺平。"""
+        S = torch.tensor(self.cfg.rewards.sym_joint_sign, device=self.device)
+        diff = self.dof_pos[:, :6] - S * self.sym_hist[:, -1, :]
+        n = torch.norm(diff, dim=1)
+        return torch.exp(-2.0 * n) - 0.2 * n.clamp(0, 0.5)
+
     def _reward_feet_distance(self):
         """
         Calculates the reward based on the distance between the feet. Penilize feet get close to each other or too far away.

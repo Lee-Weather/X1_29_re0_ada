@@ -332,6 +332,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         
         class scales:
             ref_joint_pos = 2.2
+            gait_symmetry = 1.0   # exp_ada_1.1 修改六: 左右步态镜像对称（判别实验假设 B 对策）
             feet_clearance = 1.
             feet_contact_number = 2.0
             # gait

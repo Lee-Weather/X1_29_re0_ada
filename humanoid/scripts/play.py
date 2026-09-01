@@ -142,6 +142,21 @@ def play(args):
     # prepare environment
     env, _ = task_registry.make_env(name=args.task, args=args, env_cfg=env_cfg)
 
+    # 坑3（post-201-5）：回放关闭随机化后 dof armature 回退 URDF 基线（X1_12DOF.urdf 无 armature 属性 = 0），
+    # "轻腿"回放失真（exp5 教训）。此处固定为 config 各 joint_*_armature_range 中值（= 训练随机化校准中心，
+    # exp_ada_1 修改四重算值：髋Pitch 0.21 / 髋Yaw 0.014 / 膝 0.27）。后续 reset 中 randomize 关闭时不覆盖，保持生效。
+    if not env_cfg.domain_rand.randomize_joint_armature:
+        armature_centers = []
+        for i in range(env.num_dof):
+            r = getattr(env.cfg.domain_rand, f'joint_{i+1}_armature_range')
+            armature_centers.append(0.5 * (r[0] + r[1]))
+        for env_id in range(env.num_envs):
+            dof_props = env.gym.get_actor_dof_properties(env.envs[env_id], 0)
+            for i in range(env.num_dof):
+                dof_props["armature"][i] = armature_centers[i]
+            env.gym.set_actor_dof_properties(env.envs[env_id], 0, dof_props)
+        print("armature fixed to calibration centers:",
+              ["%.4f" % v for v in armature_centers])
 
     env.set_camera(env_cfg.viewer.pos, env_cfg.viewer.lookat)
 
