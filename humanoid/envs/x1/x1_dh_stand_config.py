@@ -324,6 +324,9 @@ class X1DHStandCfg(LeggedRobotCfg):
         ref_vel_nominal = 0.6      # 锚点：固定摆幅匹配的速度（exp0.1 实证 99% 跟踪点），scale=1 保持基线行为
         ref_step_scale_min = 0.3   # 低速下限（≈0.18 m/s），防参考步长落入摩擦死区
         ref_step_scale_max = 1.2   # 高速上限，当前域内不触发，仅安全裕量
+        # exp_ada_1.1 修改六: 左右步态对称奖励的镜像符号（2026-09-01 FK 判别实验实测）：
+        # 旧 URDF 左右 hip_pitch/roll/yaw 物理反向(S=-1)，knee/ankle_pitch 同向(S=+1)，ankle_roll 反向(S=-1)
+        sym_joint_sign = [-1.0, -1.0, -1.0, 1.0, 1.0, -1.0]
         # if true negative total rewards are clipped at zero (avoids early termination problems)
         only_positive_rewards = True
         # tracking reward = exp(-error*sigma)
