@@ -8,7 +8,7 @@
 | exp0.1 | 2026-08-28 | 逐关节 armature 对齐真机阶跃辨识（膝 0.25 / 髋Pitch 0.16 / 髋Yaw 逐侧），Flux 云端从零 6000 轮；回放稳态跟踪 99%（exp0 为 71%），达标 | ✅达标（已测试） | TASK_20260828_129 | limxmtcm4nrkwbk70j@emalupe.com | model_6000.pt |
 | exp0.2 | 2026-08-31 | 侧向速度抑制：新增 lat_vel 线性惩罚 + feet_distance 0.2→0.3，从 exp0.1 ckpt6000 云端续训 3000 轮；站立净漂移 -0.094→±0.002 消除 ✅，稳态 \|vy\| 0.126~0.136 略超 0.12 ⚠️，0.6 档跟踪 104% | ⚠️部分达标（已测试） | TASK_20260831_027 | limxmtcm4nrkwbk70j@emalupe.com | model_8999.pt |
 | exp_ada_1 | 2026-08-31 | 跨版本系列首训：速度域聚焦 [-0.2,0.6]+关闭指令 curriculum+参考摆幅速度自适应（sagittal × step_scale）+**URDF 切回 X1_12DOF 旧约定**+armature 重对齐旧 URDF M_ii；换新账号 L20 从零 6000 轮；全域速度跟踪达标（0.6 档 81%/后退 89%）但回放发现**右腿摆动相拖地+左右不对称**（右腿抬升峰值仅左腿 40~70%，左脚冲击 9174N） | ⚠️部分达标（已测试） | TASK_20260901_034 | limxmt8fwmtarfjsiv@emalupe.com | model_6000.pt |
-| exp_ada_1.1 | 2026-09-01 | 微调：新增 gait_symmetry 左右步态镜像对称奖励 1.0（判别实验实锤策略收敛到不对称偏解，假设 B 对策），继承 exp_ada_1 全部配置从零 6000 轮 | 🔄训练中 | TASK_20260901_084 | limxmt8fwmtarfjsiv@emalupe.com | 待定 |
+| exp_ada_1.1 | 2026-09-01 | 微调：新增 gait_symmetry 左右步态镜像对称奖励 1.0（判别实验实锤策略收敛到不对称偏解，假设 B 对策），继承 exp_ada_1 全部配置从零 6000 轮；首次 TASK_20260901_084 因 config 漏提交 sym_joint_sign 终止，补齐后重跑 | 🔄训练中 | TASK_20260901_096 | limxmt8fwmtarfjsiv@emalupe.com | 待定 |
 
 ---
 
@@ -697,4 +697,5 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 
 ### 7. 实验结果
 
+> 2026-09-01 15:07 首次提交 TASK_20260901_084，15:13 因 `AttributeError: 'rewards' object has no attribute 'sym_joint_sign'` 终止——commit `5690201` 中 config 仅含 gait_symmetry 权重、漏提交 sym_joint_sign 三行（编辑丢失）。15:50 补提交 `495f10a` 修复，15:57 重跑 TASK_20260901_096。
 > 待训练完成后补充。
