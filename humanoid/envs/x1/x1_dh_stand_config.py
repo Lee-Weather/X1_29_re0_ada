@@ -315,15 +315,17 @@ class X1DHStandCfg(LeggedRobotCfg):
         # 索引 10 = right_ankle_pitch：X1_12DOF.urdf 右踝轴(0 0 1)与左踝(0 0 -1)反向；
         # 左右 delta 同为 -0.16，经相位取正/取负后 ref 符号相反（左正右负），物理摆动左右对称（exp0 修改二的逆操作）
         final_swing_joint_delta_pos = [0.25, 0.05, -0.11, 0.35, -0.16, 0.0, -0.25, -0.05, 0.11, 0.35, -0.16, 0.0]
-        target_feet_height = 0.03 
-        target_feet_height_max = 0.06
+        target_feet_height = 0.045  # exp_ada_2 修改一: 0.03→0.045, 强制充分抬脚（1.1 实测均值仅 6~15mm 拖地）
+        target_feet_height_max = 0.08  # exp_ada_2 修改一: 0.06→0.08, 连续奖励头部空间
         feet_to_ankle_distance = 0.041
         cycle_time = 0.7
         # exp1.0: 参考轨迹迈步幅度速度自适应（仅 sagittal 关节缩放，roll/yaw 固定）
         # step_scale = clamp(|vx_cmd| / ref_vel_nominal, ref_step_scale_min, ref_step_scale_max)
-        ref_vel_nominal = 0.6      # 锚点：固定摆幅匹配的速度（exp0.1 实证 99% 跟踪点），scale=1 保持基线行为
+        ref_vel_nominal = 0.55     # exp_ada_2 修改三: 0.6→0.55, 0.6档 scale=1.09 参考摆幅+9% 补高速推进
         ref_step_scale_min = 0.3   # 低速下限（≈0.18 m/s），防参考步长落入摩擦死区
         ref_step_scale_max = 1.2   # 高速上限，当前域内不触发，仅安全裕量
+        # exp_ada_2 修改二: 踝摆幅下限与步幅解耦——低速小步也要抬脚（踝背屈主导脚尖离地）
+        ref_ankle_scale_min = 0.6
         # exp_ada_1.1 修改六: 左右步态对称奖励的镜像符号（2026-09-01 FK 判别实验实测）：
         # 旧 URDF 左右 hip_pitch/roll/yaw 物理反向(S=-1)，knee/ankle_pitch 同向(S=+1)，ankle_roll 反向(S=-1)
         sym_joint_sign = [-1.0, -1.0, -1.0, 1.0, 1.0, -1.0]
@@ -336,7 +338,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         class scales:
             ref_joint_pos = 2.2
             gait_symmetry = 1.0   # exp_ada_1.1 修改六: 左右步态镜像对称（判别实验假设 B 对策）
-            feet_clearance = 1.
+            feet_clearance = 1.5  # exp_ada_2 修改一: 1.0→1.5 + 奖励连续化（原 0/1 指示低抬无梯度）
             feet_contact_number = 2.0
             # gait
             feet_air_time = 1.2

@@ -282,6 +282,9 @@ class X1DHStandEnv(LeggedRobot):
         # 故 sagittal 摆幅按 |vx_cmd| 线性缩放；roll/yaw 与速度弱相关，保持固定
         step_scale = (self.commands[:, 0].abs() / self.cfg.rewards.ref_vel_nominal).clamp(
             self.cfg.rewards.ref_step_scale_min, self.cfg.rewards.ref_step_scale_max)
+        # exp_ada_2 修改二: 踝摆幅与步幅解耦——低速小步也要抬脚。
+        # ankle_pitch(idx 4/10) 单独用更高下限(踝背屈主导脚尖离地)，hip/knee 维持原 scale 保低速速度跟踪
+        ankle_scale = step_scale.clamp(min=self.cfg.rewards.ref_ankle_scale_min)
         d = self.cfg.rewards.final_swing_joint_delta_pos
         # left swing
         sin_pos_l[sin_pos_l > 0] = 0
@@ -289,7 +292,7 @@ class X1DHStandEnv(LeggedRobot):
         self.ref_dof_pos[:, 1] = -sin_pos_l * d[1]
         self.ref_dof_pos[:, 2] = -sin_pos_l * d[2]
         self.ref_dof_pos[:, 3] = -sin_pos_l * d[3] * step_scale  # L knee_pitch
-        self.ref_dof_pos[:, 4] = -sin_pos_l * d[4] * step_scale  # L ankle_pitch
+        self.ref_dof_pos[:, 4] = -sin_pos_l * d[4] * ankle_scale  # L ankle_pitch
         self.ref_dof_pos[:, 5] = -sin_pos_l * d[5]
         # right
         sin_pos_r[sin_pos_r < 0] = 0
@@ -297,7 +300,7 @@ class X1DHStandEnv(LeggedRobot):
         self.ref_dof_pos[:, 7] = sin_pos_r * d[7]
         self.ref_dof_pos[:, 8] = sin_pos_r * d[8]
         self.ref_dof_pos[:, 9] = sin_pos_r * d[9] * step_scale   # R knee_pitch
-        self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale # R ankle_pitch
+        self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * ankle_scale # R ankle_pitch
         self.ref_dof_pos[:, 11] = sin_pos_r * d[11]
 
         self.ref_dof_pos[torch.abs(sin_pos) < 0.1] = 0.
@@ -804,9 +807,14 @@ class X1DHStandEnv(LeggedRobot):
         # Compute swing mask
         swing_mask = 1 - self._get_stance_mask()
 
-        # feet height should larger than target feet height at the peak
-        rew_pos = (self.feet_height > self.cfg.rewards.target_feet_height) * (self.feet_height < self.cfg.rewards.target_feet_height_max)
-        rew_pos = torch.sum(rew_pos * swing_mask, dim=1)
+        # exp_ada_2 修改一: 连续化——原 0/1 指示在抬升<target 时零梯度（拖地无惩罚信号），
+        # 改为不足侧高斯衰减（梯度指向抬高）+ 超上限线性惩罚（防过度高抬）。
+        # h>=target 时 rew=1（与原窗口内行为一致），h=0.03(差0.015)时≈0.37，h≈0 时≈0
+        h = self.feet_height
+        h_low = (self.cfg.rewards.target_feet_height - h).clamp(min=0.)
+        rew_h = torch.exp(-torch.square(h_low / 0.015))
+        rew_h -= 20. * (h - self.cfg.rewards.target_feet_height_max).clamp(min=0.)
+        rew_pos = torch.sum(rew_h * swing_mask, dim=1)
         self.feet_height *= ~contact
         return rew_pos
 
