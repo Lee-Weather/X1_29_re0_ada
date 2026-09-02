@@ -11,6 +11,7 @@
 | exp_ada_1.1 | 2026-09-02 | 微调：新增 gait_symmetry 左右步态镜像对称奖励 1.0（判别实验实锤策略收敛到不对称偏解，假设 B 对策），继承 exp_ada_1 全部配置从零 6000 轮；对称性核心修复成功（抬升峰值差 31%→11%，峰值力 9174N→3912N），0.2/0.4/后退全面升至 99%/90%/93%，yaw 漂移减半；0.6 档 77% 未达标（对称低抬腿小步，高速推进不足） | ⚠️部分达标（已测试） | TASK_20260902_009 | limxmt8fwmtarfjsiv@emalupe.com | model_6000.pt |
 | exp_ada_1（复跑） | 2026-09-02 | 本会话在不知远程进展时创建的 exp_ada_1 复跑（旧配置无对称奖励，commit `53dabd9`），与 exp_ada_1.1 修复方向重复，**建议停止** | ⏸️待裁决 | TASK_20260902_006 | limxmtcm5s0yriv75d@emalupe.com | 待定 |
 | exp_ada_2 | 2026-09-02 | 抬腿充分性修复（clearance 连续化+weight 1.5+target 0.045 / 踝摆幅解耦 0.6 / nominal 0.55）**失败**：3000 轮内未收敛+多改互相打架，速度跟踪全域崩(0.2/0.4/0.6=48/60/66%、后退 1%)，拖地 24→74% 反升、抬升 30→17mm 反降 | ❌未达标（已测试） | TASK_20260902_141 | limxmt8fxevjvx38jd@emalupe.com | model_3000.pt |
+| exp_ada_3 | 2026-09-02 | 候选 A：回退 exp_ada_2 全部改动到 exp_ada_1.1 基线，**仅保留 target_feet_height 0.03→0.045**（0/1 指示不变、不动 weight/nominal/踝），训 6000 轮——单点验证高抬目标能否纯靠 clear 约束达成而速度不回退 | 待训练 | 待定 | limxmt8fxevjvx38jd@emalupe.com | 待定 |
 
 ---
 
@@ -920,3 +921,90 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
    - 候选 B：仅 `ref_step_scale_max 1.2→1.4`（不动 clearance），6000 轮——验证 0.6 档推进，避免重蹈"多改互相打架"
 3. **避免 L4/L20 排队**：本次 L4 实际起跑快（15:07 启动即跑），可继续 L4；但确认 L4 算力下 3000→6000 轮时长翻倍可接受
 4. 若必须保留对称成果，确保新改动不破坏 gait_symmetry=1.0 与 tracking 的平衡
+
+---
+
+## 实验 exp_ada_3：候选 A——回退基线，仅 target_feet_height 上调 0.045（单点微调，训 6000 轮）
+
+### 1. 上一实验结果与教训
+
+> 数据：exp_ada_2 训练曲线（TASK_20260902_141，3000 轮）+ `czy/data/exp_ada_2/isaac_diag.csv`
+> - speed 跟踪全域崩坏：0.2/0.4/0.6 = 48/60/66%、后退 1%（不会后退）
+> - 步态质量反向恶化：抬升峰值 30→17mm、拖地占比 24→74%、摆动相受力 69%
+> - 对称性保持（抬升差 7%）
+>
+> **核心教训**：
+> - **多修改互相打架**：clearance 连续化+权重 1.5、踝下限 0.6、nominal 0.55 三连改，任一都在侵蚀 tracking 与后退，叠加后彻底破坏步态协调
+> - **3000 轮不足**：reward 175.6 含 clearance 虚高，tracking 未收敛（0.6 档 66%）
+> - **高抬腿的正确方向应是"纯靠 clear 约束"，不碰 weight/nominal/踝**——本轮正是为了隔离验证这一点
+
+### 2. 本轮修改目标
+
+- 目标1：在 exp_ada_1.1 基线上，仅把 `target_feet_height` 0.03→0.045，其它全部保持基线
+- 目标2：验证能否纯靠 0/1 指示 clear 奖励的上限平移，把抬升拉到 45mm 且不破坏速度跟踪
+- 目标3：训足 6000 轮（验证收敛，避免重蹈 exp_ada_2 的 3000 轮不足）
+- 验收标准：0.2/0.4/后退 保持 exp_ada_1.1 水平（≥85%/≥85%/≥80%）、0.6 档 ≥80%、抬升峰值 ≥40mm 且拖地占比较 1.1(24~32%) 下降、对称不破（抬升差 ≤20%）
+
+### 3. 修改内容
+
+### 修改一：回退 exp_ada_2 全部改动（env + config）
+
+| 文件 | 回退内容 |
+| --- | --- |
+| `x1_dh_stand_env.py` | `_reward_feet_clearance` 恢复 0/1 指示（去掉 exp_ada_2 连续化）；`compute_ref_state` 去掉 ankle_scale 分离，idx 4/10 恢复用 step_scale |
+| `x1_dh_stand_config.py` | `target_feet_height_max` 0.08→0.06、`feet_clearance` 1.5→1.0、删 `ref_ankle_scale_min`、`ref_vel_nominal` 0.55→0.6 |
+
+### 修改二（候选 A 唯一改动）：target_feet_height 0.03→0.045
+
+| 参数 | 旧值（基线） | 新值 | 说明 |
+| --- | --- | --- | --- |
+| `target_feet_height` | 0.03 | **0.045** | 0/1 指示窗口上限从 0.03 提高到 0.045，要求摆动相峰值抬升更高才得满分 |
+
+**理由**：与 exp_ada_2 关键不同——保持 clear 奖励的 0/1 形状与权重 1.0 不变，只平移达标窗口到更高抬升。若 6000 轮后既能抬高又不破速度，则证明"高抬目标本身无害，是 exp_ada_2 的多改组合害的"。
+
+### 4. 修改文件
+
+- `humanoid/envs/x1/x1_dh_stand_env.py`：回退（恢复 0/1 clearance + 无 ankle_scale）
+- `humanoid/envs/x1/x1_dh_stand_config.py`：回退（max 0.06 / clearance 1.0 / 删 ankle_min / nominal 0.6）+ 候选 A（target 0.045）
+
+### 5. 训练参数
+
+| 参数 | 值 |
+| --- | --- |
+| 训练方式 | 从零（config 改动，6000 轮） |
+| GM账号 | limxmt8fxevjvx38jd@emalupe.com |
+| max_iterations | **6000** |
+| save_interval | 100 |
+| num_envs | 4096 |
+| seed | 5 |
+| learning_rate | 1e-5（fixed） |
+| 算力 | L4（ESKU000003，前次起跑快；6000 轮约 4h，可接受则用） |
+| 镜像 | BJX00000001 / V000124 |
+| 代码仓库 | GitHub @ main（候选 A commit，开训前推送） |
+| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp_ada_3 --headless --max_iterations=6000` |
+
+**继承说明**：gait_symmetry=1.0（exp_ada_1.1 对称成果保留）+ exp_ada_1 全部基线；本轮实际仅 target 一处区别于 exp_ada_1.1。
+
+### 6. 预期与验收
+
+**目标指标**（训练日志 + 回放 model_6000，阶梯 0→0.2→0.4→0.6→-0.2→0）：
+
+| 指标 | exp_ada_1.1 | exp_ada_3 目标 | 异常信号 |
+| --- | --- | --- | --- |
+| 0.6 m/s 跟踪 | 77% | **≥80%** | <70% |
+| 0.2 / 0.4 / 后退 | 99/90/93% | ≥85/≥85/≥80%（不回退） | 0.2 档 <80% |
+| 抬升峰值 L/R | 30~34mm | **≥40mm** | <30mm |
+| 拖地占比（行走） | 24~32% | **≤20%** | >35% |
+| 左右抬升峰值差 | 11% | ≤20% | >30% |
+| Mean reward | 190.6 | ≥180 | <160 |
+| Mean episode length | 2359.9 | ≥2100 | <1800 |
+| 全程不摔倒 | ✅ | ✅ | 摔倒 |
+
+**风险预案**：
+- 抬升爬升但 0.6 档回退 → 下一轮改 `feet_clearance 1.0→1.2` 温和加权（而非 1.5），仍单点
+- 抬升未达成（仍<30mm）→ 说明 0/1 指示知识不足，再评估连续化但**保持 weight 1.0、单点改 target**
+- 0.6 档独立瓶颈（抬升+低速都 OK 仅 0.6 差）→ 才考虑 nominal/step_scale_max 单点调，不叠加
+
+### 7. 实验结果
+
+> 待训练完成后补充。
