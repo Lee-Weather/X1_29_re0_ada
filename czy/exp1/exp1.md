@@ -1,4 +1,4 @@
-# 实验记录
+﻿# 实验记录
 
 ## 实验索引
 
@@ -10,8 +10,8 @@
 | exp_ada_1 | 2026-08-31 | 跨版本系列首训：速度域聚焦 [-0.2,0.6]+关闭指令 curriculum+参考摆幅速度自适应（sagittal × step_scale）+**URDF 切回 X1_12DOF 旧约定**+armature 重对齐旧 URDF M_ii；换新账号 L20 从零 6000 轮；全域速度跟踪达标（0.6 档 81%/后退 89%）但回放发现**右腿摆动相拖地+左右不对称**（右腿抬升峰值仅左腿 40~70%，左脚冲击 9174N） | ⚠️部分达标（已测试） | TASK_20260901_034 | limxmt8fwmtarfjsiv@emalupe.com | model_6000.pt |
 | exp_ada_1.1 | 2026-09-02 | 微调：新增 gait_symmetry 左右步态镜像对称奖励 1.0（判别实验实锤策略收敛到不对称偏解，假设 B 对策），继承 exp_ada_1 全部配置从零 6000 轮；对称性核心修复成功（抬升峰值差 31%→11%，峰值力 9174N→3912N），0.2/0.4/后退全面升至 99%/90%/93%，yaw 漂移减半；0.6 档 77% 未达标（对称低抬腿小步，高速推进不足） | ⚠️部分达标（已测试） | TASK_20260902_009 | limxmt8fwmtarfjsiv@emalupe.com | model_6000.pt |
 | exp_ada_1（复跑） | 2026-09-02 | 本会话在不知远程进展时创建的 exp_ada_1 复跑（旧配置无对称奖励，commit `53dabd9`），与 exp_ada_1.1 修复方向重复，**建议停止** | ⏸️待裁决 | TASK_20260902_006 | limxmtcm5s0yriv75d@emalupe.com | 待定 |
-| exp_ada_2 | 2026-09-02 | 抬腿充分性修复（clearance 连续化+weight 1.5+target 0.045 / 踝摆幅解耦 0.6 / nominal 0.55）**失败**：3000 轮内未收敛+多改互相打架，速度跟踪全域崩(0.2/0.4/0.6=48/60/66%、后退 1%)，拖地 24→74% 反升、抬升 30→17mm 反降 | ❌未达标（已测试） | TASK_20260902_141 | limxmt8fxevjvx38jd@emalupe.com | model_3000.pt |
-| exp_ada_3 | 2026-09-02 | 候选 A：回退 exp_ada_2 全部改动到 exp_ada_1.1 基线，**仅保留 target_feet_height 0.03→0.045**（0/1 指示不变、不动 weight/nominal/踝），训 6000 轮——单点验证高抬目标能否纯靠 clear 约束达成而速度不回退 | 待训练 | 待定 | limxmt8fxevjvx38jd@emalupe.com | 待定 |
+| exp_ada_1.2 | 2026-09-02 | 抬腿充分性修复（clearance 连续化+weight 1.5+target 0.045 / 踝摆幅解耦 0.6 / nominal 0.55）**失败**：3000 轮内未收敛+多改互相打架，速度跟踪全域崩(0.2/0.4/0.6=48/60/66%、后退 1%)，拖地 24→74% 反升、抬升 30→17mm 反降 | ❌未达标（已测试） | TASK_20260902_141 | limxmt8fxevjvx38jd@emalupe.com | model_3000.pt |
+| exp_ada_1.3 | 2026-09-02 | 候选 A：回退 exp_ada_1.2 全部改动到 exp_ada_1.1 基线，**仅保留 target_feet_height 0.03→0.045**（0/1 指示不变、不动 weight/nominal/踝），训 6000 轮——单点验证高抬目标能否纯靠 clear 约束达成而速度不回退 | 🔄训练中（6000 轮） | TASK_20260902_205 | limxmt8fxevjvx38jd@emalupe.com | 待定 |
 
 ---
 
@@ -610,7 +610,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
   3. **离线 FK 数值验证（定案）**：修正 origin 变换顺序 bug 后，分别以两版 URDF + 对应 config 参数计算一个步态周期左右脚轨迹（toe+heel 两点，0.6 档 scale=1）：**exp_ada_1 配置镜像误差 = 0.00mm（toe+heel 全周期逐点）**，与 mirrored（exp0.x 正常步态参考）物理完全等价；d10 翻 +0.16 反而破坏对称（13mm）；逐关节方向敏感性证实旧 URDF 左右 hip_pitch/roll/yaw 物理反向、knee/ankle_pitch 同向，delta 数组符号约定（d[0]=+0.25 vs d[6]=-0.25 等）与之自洽
   - **判定：假设 A 排除（参考轨迹完美镜像对称），假设 B 成立——策略在无对称约束下收敛到不对称偏解**。exp_ada_1 独有改动（指令域聚焦/step_scale/armature 重对齐/seed）改变了 loss landscape，本次训练落入不对称收敛盆地（exp0.x 恰好落入对称盆地）
 
-**下一轮方向（修正，晋级 exp_ada_2）**：
+**下一轮方向（修正，晋级 exp_ada_1.2）**：
 
 1. **对称性约束（假设 B 对策，首选）**：新增左右步态对称奖励 `_reward_gait_symmetry`——比较左腿关节角 q_L(t) 与右腿关节角 q_R(t+T/2) 的镜像差（hip/roll/yaw 取号映射 + knee/ankle 同号），权重 -0.5 起步；或等效做镜像观测增广（50% 概率左右翻转 obs/action 序列）。从零重训 6000 轮
 2. **快速对照（可选）**：同配置仅换 seed 重训一次，验证"收敛盆地"假设并评估不对称概率；若对称解概率高，成本最低路径为换 seed 重跑
@@ -754,7 +754,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 - 站立段脚 z 峰峰 86~91mm 为 reset 落地瞬态（初始高度 0.7m 沉降至 0.61m），非抖动，排除
 - 残余不对称轻微（0.2 档抬升 L7.6/R6.4mm 基本对称），主矛盾已从"左右不对称"转为"整体抬腿不足"
 
-**下一轮方向（晋级 exp_ada_2）**：
+**下一轮方向（晋级 exp_ada_1.2）**：
 
 1. **高抬腿约束（首选）**：feet_clearance 权重 1.0→2.0，或将达标窗口下限 target_feet_height 0.03→0.05，强制摆动相充分离地；预期同时修复拖地占比与 0.6 档推进
 2. gait_symmetry 权重保持 1.0（对称成果勿失）；若高抬腿与对称再度竞争，降至 0.7
@@ -764,7 +764,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 
 ---
 
-## 实验 exp_ada_2：抬腿充分性修复（feet_clearance 连续化 + 踝摆幅解耦 + 高速推进补偿）
+## 实验 exp_ada_1.2：抬腿充分性修复（feet_clearance 连续化 + 踝摆幅解耦 + 高速推进补偿）
 
 ### 1. 上一实验结果与教训
 
@@ -836,7 +836,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 | 算力 | 4090D 优先（ESKU000001，L20 上轮排队 16h+；4090D 即时起跑约 2h/6000 轮） |
 | 镜像 | BJX00000001 / V000124（isaac-gym-v19） |
 | 代码仓库 | https://github.com/Lee-Weather/X1_29_re0_ada.git @ main（开训前推送，含本轮三处修改） |
-| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp_ada_2 --headless --max_iterations=6000` |
+| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp_ada_1.2 --headless --max_iterations=6000` |
 
 **继承说明**：完整继承 exp_ada_1.1 的 gait_symmetry=1.0（对称成果勿失）与 exp_ada_1 全部配置；本轮仅动抬腿充分性与高速推进。
 
@@ -866,8 +866,8 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 
 ### 7. 实验结果
 
-> 训练任务：TASK_20260902_141（L4 1×24G，2026-09-02 15:07 ~ 16:55，iter 0→2999 从零 3000 轮；算力辗转记录见索引行），run 目录 `2026-09-02_15-13-08exp_ada_2`
-> 最终 checkpoint：`model_3000.pt`（9.8MB，已归档 `czy/data/exp_ada_2/`）
+> 训练任务：TASK_20260902_141（L4 1×24G，2026-09-02 15:07 ~ 16:55，iter 0→2999 从零 3000 轮；算力辗转记录见索引行），run 目录 `2026-09-02_15-13-08exp_ada_1.2`
+> 最终 checkpoint：`model_3000.pt`（9.8MB，已归档 `czy/data/exp_ada_1.2/`）
 > 回放：本地服务器 10.12.201.5（目录 `exp_20260902_172032`），6 段速度阶梯，armature 校准生效；产物 `isaac_diag.csv` + `play_output.mp4` 已归档
 
 #### 训练趋势（GM 曲线关键点）
@@ -895,7 +895,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 
 #### 步态质量对比
 
-| 指标 | exp_ada_1.1 | exp_ada_2 | 目标 | 判定 |
+| 指标 | exp_ada_1.1 | exp_ada_1.2 | 目标 | 判定 |
 | --- | --- | --- | --- | --- |
 | 抬升峰值 L/R | 30~34mm | **17 / 19 mm** | ≥45mm（修改一目标） | ❌ 反降 |
 | 拖地占比（行走，5N 阈值） | 24~32% | **74%** | ≤10% | ❌ 反升 |
@@ -924,11 +924,11 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 
 ---
 
-## 实验 exp_ada_3：候选 A——回退基线，仅 target_feet_height 上调 0.045（单点微调，训 6000 轮）
+## 实验 exp_ada_1.3：候选 A——回退基线，仅 target_feet_height 上调 0.045（单点微调，训 6000 轮）
 
 ### 1. 上一实验结果与教训
 
-> 数据：exp_ada_2 训练曲线（TASK_20260902_141，3000 轮）+ `czy/data/exp_ada_2/isaac_diag.csv`
+> 数据：exp_ada_1.2 训练曲线（TASK_20260902_141，3000 轮）+ `czy/data/exp_ada_1.2/isaac_diag.csv`
 > - speed 跟踪全域崩坏：0.2/0.4/0.6 = 48/60/66%、后退 1%（不会后退）
 > - 步态质量反向恶化：抬升峰值 30→17mm、拖地占比 24→74%、摆动相受力 69%
 > - 对称性保持（抬升差 7%）
@@ -942,16 +942,16 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 
 - 目标1：在 exp_ada_1.1 基线上，仅把 `target_feet_height` 0.03→0.045，其它全部保持基线
 - 目标2：验证能否纯靠 0/1 指示 clear 奖励的上限平移，把抬升拉到 45mm 且不破坏速度跟踪
-- 目标3：训足 6000 轮（验证收敛，避免重蹈 exp_ada_2 的 3000 轮不足）
+- 目标3：训足 6000 轮（验证收敛，避免重蹈 exp_ada_1.2 的 3000 轮不足）
 - 验收标准：0.2/0.4/后退 保持 exp_ada_1.1 水平（≥85%/≥85%/≥80%）、0.6 档 ≥80%、抬升峰值 ≥40mm 且拖地占比较 1.1(24~32%) 下降、对称不破（抬升差 ≤20%）
 
 ### 3. 修改内容
 
-### 修改一：回退 exp_ada_2 全部改动（env + config）
+### 修改一：回退 exp_ada_1.2 全部改动（env + config）
 
 | 文件 | 回退内容 |
 | --- | --- |
-| `x1_dh_stand_env.py` | `_reward_feet_clearance` 恢复 0/1 指示（去掉 exp_ada_2 连续化）；`compute_ref_state` 去掉 ankle_scale 分离，idx 4/10 恢复用 step_scale |
+| `x1_dh_stand_env.py` | `_reward_feet_clearance` 恢复 0/1 指示（去掉 exp_ada_1.2 连续化）；`compute_ref_state` 去掉 ankle_scale 分离，idx 4/10 恢复用 step_scale |
 | `x1_dh_stand_config.py` | `target_feet_height_max` 0.08→0.06、`feet_clearance` 1.5→1.0、删 `ref_ankle_scale_min`、`ref_vel_nominal` 0.55→0.6 |
 
 ### 修改二（候选 A 唯一改动）：target_feet_height 0.03→0.045
@@ -960,7 +960,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 | --- | --- | --- | --- |
 | `target_feet_height` | 0.03 | **0.045** | 0/1 指示窗口上限从 0.03 提高到 0.045，要求摆动相峰值抬升更高才得满分 |
 
-**理由**：与 exp_ada_2 关键不同——保持 clear 奖励的 0/1 形状与权重 1.0 不变，只平移达标窗口到更高抬升。若 6000 轮后既能抬高又不破速度，则证明"高抬目标本身无害，是 exp_ada_2 的多改组合害的"。
+**理由**：与 exp_ada_1.2 关键不同——保持 clear 奖励的 0/1 形状与权重 1.0 不变，只平移达标窗口到更高抬升。若 6000 轮后既能抬高又不破速度，则证明"高抬目标本身无害，是 exp_ada_1.2 的多改组合害的"。
 
 ### 4. 修改文件
 
@@ -981,7 +981,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 | 算力 | L4（ESKU000003，前次起跑快；6000 轮约 4h，可接受则用） |
 | 镜像 | BJX00000001 / V000124 |
 | 代码仓库 | GitHub @ main（候选 A commit，开训前推送） |
-| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp_ada_3 --headless --max_iterations=6000` |
+| 启动命令 | `gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp_ada_1_3 --headless --max_iterations=6000` |
 
 **继承说明**：gait_symmetry=1.0（exp_ada_1.1 对称成果保留）+ exp_ada_1 全部基线；本轮实际仅 target 一处区别于 exp_ada_1.1。
 
@@ -989,7 +989,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 
 **目标指标**（训练日志 + 回放 model_6000，阶梯 0→0.2→0.4→0.6→-0.2→0）：
 
-| 指标 | exp_ada_1.1 | exp_ada_3 目标 | 异常信号 |
+| 指标 | exp_ada_1.1 | exp_ada_1.3 目标 | 异常信号 |
 | --- | --- | --- | --- |
 | 0.6 m/s 跟踪 | 77% | **≥80%** | <70% |
 | 0.2 / 0.4 / 后退 | 99/90/93% | ≥85/≥85/≥80%（不回退） | 0.2 档 <80% |
