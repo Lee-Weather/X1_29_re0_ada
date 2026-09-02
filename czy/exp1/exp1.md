@@ -10,7 +10,7 @@
 | exp_ada_1 | 2026-08-31 | 跨版本系列首训：速度域聚焦 [-0.2,0.6]+关闭指令 curriculum+参考摆幅速度自适应（sagittal × step_scale）+**URDF 切回 X1_12DOF 旧约定**+armature 重对齐旧 URDF M_ii；换新账号 L20 从零 6000 轮；全域速度跟踪达标（0.6 档 81%/后退 89%）但回放发现**右腿摆动相拖地+左右不对称**（右腿抬升峰值仅左腿 40~70%，左脚冲击 9174N） | ⚠️部分达标（已测试） | TASK_20260901_034 | limxmt8fwmtarfjsiv@emalupe.com | model_6000.pt |
 | exp_ada_1.1 | 2026-09-02 | 微调：新增 gait_symmetry 左右步态镜像对称奖励 1.0（判别实验实锤策略收敛到不对称偏解，假设 B 对策），继承 exp_ada_1 全部配置从零 6000 轮；对称性核心修复成功（抬升峰值差 31%→11%，峰值力 9174N→3912N），0.2/0.4/后退全面升至 99%/90%/93%，yaw 漂移减半；0.6 档 77% 未达标（对称低抬腿小步，高速推进不足） | ⚠️部分达标（已测试） | TASK_20260902_009 | limxmt8fwmtarfjsiv@emalupe.com | model_6000.pt |
 | exp_ada_1（复跑） | 2026-09-02 | 本会话在不知远程进展时创建的 exp_ada_1 复跑（旧配置无对称奖励，commit `53dabd9`），与 exp_ada_1.1 修复方向重复，**建议停止** | ⏸️待裁决 | TASK_20260902_006 | limxmtcm5s0yriv75d@emalupe.com | 待定 |
-| exp_ada_2 | 2026-09-02 | 抬腿充分性修复：feet_clearance 奖励连续化（0/1→不足侧高斯梯度）+target 0.045/权重 1.5+踝摆幅下限解耦 0.6+ref_vel_nominal 0.55 补高速推进；直击 1.1 遗留的拖地-踝抖-0.6 档欠速因果链 | 🔄训练中（3000 轮） | TASK_20260902_082 | limxmt8fwmtarfjsiv@emalupe.com | 待定 |
+| exp_ada_2 | 2026-09-02 | 抬腿充分性修复：feet_clearance 奖励连续化（0/1→不足侧高斯梯度）+target 0.045/权重 1.5+踝摆幅下限解耦 0.6+ref_vel_nominal 0.55 补高速推进；直击 1.1 遗留的拖地-踝抖-0.6 档欠速因果链 | 🔄训练中（3000 轮） | TASK_20260902_084 | limxmt8fwmtarfjsiv@emalupe.com | 待定 |
 
 ---
 
