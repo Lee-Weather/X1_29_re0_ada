@@ -603,11 +603,14 @@ class X1DHStandEnv(LeggedRobot):
         2026-09-01 FK 实测镜像关系: hip_pitch/roll/yaw 左右物理反向(S=-1),
         knee/ankle_pitch 同向(S=+1), ankle_roll 反向(S=-1)。
         diff = q_L(t) - S * q_R(t - T/2)；站立段两侧均在 default(镜像), diff≈0, 奖励自然≈1。
-        结构与 _reward_ref_joint_pos 同构: exp 项 + 线性尾刺防躺平。"""
+        结构与 _reward_ref_joint_pos 同构: exp 项 + 线性尾刺防躺平。
+        exp_ada_1.5 修改一: 1.4 实测右腿摆动相抬升仅左脚 54~64%（rew 终值 0.669）——
+        尾刺上限 0.5 太浅（n>0.5 罚到顶不再增长），加深到 1.0、系数 0.2→0.3，
+        对"持续性幅度偏差"给更长线性梯度。"""
         S = torch.tensor(self.cfg.rewards.sym_joint_sign, device=self.device)
         diff = self.dof_pos[:, :6] - S * self.sym_hist[:, -1, :]
         n = torch.norm(diff, dim=1)
-        return torch.exp(-2.0 * n) - 0.2 * n.clamp(0, 0.5)
+        return torch.exp(-2.0 * n) - 0.3 * n.clamp(0, 1.0)
 
     def _reward_feet_distance(self):
         """
