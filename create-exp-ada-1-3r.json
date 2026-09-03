@@ -1,0 +1,28 @@
+{
+  "taskBaseInfo": {
+    "projectId": "PRO_20260902_019",
+    "taskType": "1",
+    "trainType": "1",
+    "taskName": "exp_ada_1_3_rerun",
+    "taskDescription": "exp_ada_1.3: 候选A-回退到基线仅target_feet_height 0.045, 0/1指示不变, 从零6000轮, L4; 前次205排队阶段被平台取消(startTime null), 重跑",
+    "taskTag": [],
+    "goodsId": "ESKU000003",
+    "goodsBackId": "SKUSL000003",
+    "gpuNum": 1,
+    "imageId": "BJX00000001",
+    "imageVersion": "V000124",
+    "personalDataPath": ""
+  },
+  "taskCodeInfo": {
+    "codeType": "2",
+    "codeUrl": "[{\"codeUrl\":\"https://github.com/Lee-Weather/X1_29_re0_ada.git\",\"versionType\":\"1\",\"versionName\":\"main\"}]",
+    "mainCodeUri": "X1_29_re0_ada/humanoid/scripts/train.py",
+    "hparamsPath": "X1_29_re0_ada/humanoid/envs/x1/x1_dh_stand_config.py",
+    "startScript": "gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp_ada_1_3 --headless --max_iterations=6000",
+    "isOpen": "1"
+  },
+  "runtimeReminderConfig": {
+    "enableRuntimeReminder": false,
+    "reminderDurations": []
+  }
+}
