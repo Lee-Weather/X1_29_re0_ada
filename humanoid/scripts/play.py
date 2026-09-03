@@ -235,10 +235,33 @@ def play(args):
     # 诊断输出目录（CSV 不依赖 RENDER，始终输出）
     diag_out_dir = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'play_output')
     os.makedirs(diag_out_dir, exist_ok=True)
+
+    # 关节顺序（URDF/策略一致），用于生成真机 walk_diag 同名诊断列（sim↔real 对齐分析）
+    JOINT_NAMES = ["hip_pitch", "hip_roll", "hip_yaw", "knee_pitch", "ankle_pitch", "ankle_roll"]
+    SIDES = ["left", "right"]
+    # 真机 walk_diag 每关节 9 列: action/pos/vel/effort/pos_des_raw/pos_des_lpf/tau_des_raw/tau_des_lpf/is_parallel
+    # 仿真对应: action=策略动作, pos=dof_pos, vel=dof_vel, effort=torques(PD 输出),
+    #          pos_des_raw = pos_des_lpf = action*action_scale + default (PD 目标),
+    #          tau_des_raw = tau_des_lpf = torques, is_parallel 恒 0（仿真无并行执行器概念）
     diag = {k: [] for k in ["command_x", "base_vel_x", "base_vel_y", "base_vel_z", "base_vel_yaw",
                             "base_height", "base_pos_x", "base_pos_y", "base_yaw",
                             "foot_z_l", "foot_z_r",
-                            "foot_force_l", "foot_force_r"]}
+                            "foot_force_l", "foot_force_r",
+                            # 真机对齐: 全局列
+                            "phase_sin", "phase_cos", "cycle_time", "smoothed_speed", "active_stage",
+                            "cmd_linear_x", "cmd_linear_y", "cmd_angular_z",
+                            "base_euler_x", "base_euler_y", "base_euler_z",
+                            "base_ang_vel_x", "base_ang_vel_y", "base_ang_vel_z",
+                            "clip_count"]}
+    for side in SIDES:
+        for j in JOINT_NAMES:
+            diag[f"action_{side}_{j}_joint"] = []
+            diag[f"pos_{side}_{j}_joint"] = []
+            diag[f"vel_{side}_{j}_joint"] = []
+            diag[f"effort_{side}_{j}_joint"] = []
+            diag[f"pos_des_{side}_{j}_joint"] = []
+            diag[f"tau_des_{side}_{j}_joint"] = []
+            diag[f"pos_track_err_{side}_{j}_joint"] = []
 
     # =========== 新增：初始化速度累加器 ===========
     vel_sum = 0.0       # 速度总和
@@ -262,6 +285,10 @@ def play(args):
             env.commands[:, 2] = yaw_vel_cmd
             env.commands[:, 3] = 0.
         # 定义一个计数器在循环外
+        # exp 真机对齐: step 前相位快照（env.step 内 phase_length_buf 会 +1）
+        _ph = env._get_phase()
+        phase_snap = torch.stack([torch.sin(2 * torch.pi * _ph),
+                                  torch.cos(2 * torch.pi * _ph)], dim=1)[robot_index]
         
         obs, critic_obs, rews, dones, infos = env.step(actions.detach())
         # =========== 新增：每一帧都更新统计数据 ===========
@@ -289,6 +316,38 @@ def play(args):
         diag["foot_z_r"].append(env.rigid_state[robot_index, right_foot_idx, 2].item())
         diag["foot_force_l"].append(env.contact_forces[robot_index, left_foot_idx, 2].item())
         diag["foot_force_r"].append(env.contact_forces[robot_index, right_foot_idx, 2].item())
+
+        # exp 真机对齐: 全局列（相位取 step 前快照 phase_snapshot, 其余为 step 后状态）
+        diag["phase_sin"].append(phase_snap[0].item())
+        diag["phase_cos"].append(phase_snap[1].item())
+        diag["cycle_time"].append(env.cfg.rewards.cycle_time)
+        diag["smoothed_speed"].append(vel_sum / max(step_accum, 1))
+        diag["active_stage"].append(float(env.commands[robot_index, 0].item() > env.cfg.commands.stand_com_threshold))
+        diag["cmd_linear_x"].append(env.commands[robot_index, 0].item())
+        diag["cmd_linear_y"].append(env.commands[robot_index, 1].item())
+        diag["cmd_angular_z"].append(env.commands[robot_index, 2].item())
+        diag["base_euler_x"].append(env.base_euler_xyz[robot_index, 0].item())
+        diag["base_euler_y"].append(env.base_euler_xyz[robot_index, 1].item())
+        diag["base_euler_z"].append(env.base_euler_xyz[robot_index, 2].item())
+        diag["base_ang_vel_x"].append(env.base_ang_vel[robot_index, 0].item())
+        diag["base_ang_vel_y"].append(env.base_ang_vel[robot_index, 1].item())
+        diag["base_ang_vel_z"].append(env.base_ang_vel[robot_index, 2].item())
+        diag["clip_count"].append(0.0)
+
+        # 真机对齐: 关节级列（12 关节 × 7 列）
+        # pos_des(PD 目标) = action*action_scale + default_dof_pos; tau_des = env.torques(PD 输出)
+        ri = robot_index
+        for ji in range(env.num_dof):
+            side = SIDES[ji // 6]
+            jn = JOINT_NAMES[ji % 6]
+            pos_des_i = (actions[ri, ji] * env.cfg.control.action_scale).item() + env.default_dof_pos[0, ji].item()
+            diag[f"action_{side}_{jn}_joint"].append(actions[ri, ji].item())
+            diag[f"pos_{side}_{jn}_joint"].append(env.dof_pos[ri, ji].item())
+            diag[f"vel_{side}_{jn}_joint"].append(env.dof_vel[ri, ji].item())
+            diag[f"effort_{side}_{jn}_joint"].append(env.torques[ri, ji].item())
+            diag[f"pos_des_{side}_{jn}_joint"].append(pos_des_i)
+            diag[f"tau_des_{side}_{jn}_joint"].append(env.torques[ri, ji].item())
+            diag[f"pos_track_err_{side}_{jn}_joint"].append(pos_des_i - env.dof_pos[ri, ji].item())
         # =====================================================
         if RENDER:
             frame_count += 1
@@ -455,20 +514,46 @@ def play(args):
     # =========== 回放结束：写出诊断 CSV + 分段 Summary ===========
     dt = env_cfg.sim.dt * env_cfg.control.decimation
     csv_path = os.path.join(diag_out_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{run_name_str if RENDER else 'test'}_isaac_diag.csv")
-    header = ["step", "time_s", "command_x", "base_vel_x", "base_vel_y", "base_vel_z", "base_vel_yaw",
-              "base_height", "base_pos_x", "base_pos_y", "base_yaw",
-              "foot_z_l", "foot_z_r", "foot_force_l", "foot_force_r"]
+    # 真机对齐: 关节列顺序与 walk_diag 一致（L 腿 6 关节后 R 腿 6 关节，每关节 7 列）
+    joint_cols = []
+    for side in SIDES:
+        for j in JOINT_NAMES:
+            joint_cols += [f"action_{side}_{j}_joint", f"pos_{side}_{j}_joint", f"vel_{side}_{j}_joint",
+                           f"effort_{side}_{j}_joint", f"pos_des_{side}_{j}_joint",
+                           f"tau_des_{side}_{j}_joint", f"pos_track_err_{side}_{j}_joint"]
+    header = (["step", "time_s", "command_x", "base_vel_x", "base_vel_y", "base_vel_z", "base_vel_yaw",
+               "base_height", "base_pos_x", "base_pos_y", "base_yaw",
+               "foot_z_l", "foot_z_r", "foot_force_l", "foot_force_r"]
+              + ["phase_sin", "phase_cos", "cycle_time", "smoothed_speed", "active_stage",
+                 "cmd_linear_x", "cmd_linear_y", "cmd_angular_z",
+                 "base_euler_x", "base_euler_y", "base_euler_z",
+                 "base_ang_vel_x", "base_ang_vel_y", "base_ang_vel_z", "clip_count"]
+              + joint_cols)
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(header)
-        for i in range(len(diag["command_x"])):
-            writer.writerow([i, round(i * dt, 6), diag["command_x"][i],
-                             diag["base_vel_x"][i], diag["base_vel_y"][i], diag["base_vel_z"][i],
-                             diag["base_vel_yaw"][i], diag["base_height"][i],
-                             diag["base_pos_x"][i], diag["base_pos_y"][i], diag["base_yaw"][i],
-                             diag["foot_z_l"][i], diag["foot_z_r"][i],
-                             diag["foot_force_l"][i], diag["foot_force_r"][i]])
-    print(f"Saved diagnostic CSV -> {csv_path}")
+        n_steps = len(diag["command_x"])
+        for i in range(n_steps):
+            row = [i, round(i * dt, 6), diag["command_x"][i],
+                   diag["base_vel_x"][i], diag["base_vel_y"][i], diag["base_vel_z"][i],
+                   diag["base_vel_yaw"][i], diag["base_height"][i],
+                   diag["base_pos_x"][i], diag["base_pos_y"][i], diag["base_yaw"][i],
+                   diag["foot_z_l"][i], diag["foot_z_r"][i],
+                   diag["foot_force_l"][i], diag["foot_force_r"][i],
+                   diag["phase_sin"][i], diag["phase_cos"][i], diag["cycle_time"][i],
+                   diag["smoothed_speed"][i], diag["active_stage"][i],
+                   diag["cmd_linear_x"][i], diag["cmd_linear_y"][i], diag["cmd_angular_z"][i],
+                   diag["base_euler_x"][i], diag["base_euler_y"][i], diag["base_euler_z"][i],
+                   diag["base_ang_vel_x"][i], diag["base_ang_vel_y"][i], diag["base_ang_vel_z"][i],
+                   diag["clip_count"][i]]
+            for side in SIDES:
+                for j in JOINT_NAMES:
+                    row += [diag[f"action_{side}_{j}_joint"][i], diag[f"pos_{side}_{j}_joint"][i],
+                            diag[f"vel_{side}_{j}_joint"][i], diag[f"effort_{side}_{j}_joint"][i],
+                            diag[f"pos_des_{side}_{j}_joint"][i], diag[f"tau_des_{side}_{j}_joint"][i],
+                            diag[f"pos_track_err_{side}_{j}_joint"][i]]
+            writer.writerow(row)
+    print(f"Saved diagnostic CSV -> {csv_path} ({len(header)} cols)")
 
     print("\n===== Speed Profile Summary =====")
     acc = 0
