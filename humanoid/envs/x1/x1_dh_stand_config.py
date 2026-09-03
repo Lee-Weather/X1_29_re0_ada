@@ -308,7 +308,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         soft_dof_vel_limit = 0.9
         soft_torque_limit = 0.9
         base_height_target = 0.61
-        foot_min_dist = 0.2
+        foot_min_dist = 0.25  # exp_ada_1.6 修改二: 0.2→0.25 步宽裕度加大，提高侧滑阈值
         foot_max_dist = 1.0
 
         # final_swing_joint_pos = final_swing_joint_delta_pos + default_pos
@@ -338,13 +338,14 @@ class X1DHStandCfg(LeggedRobotCfg):
         
         class scales:
             ref_joint_pos = 2.2
-            gait_symmetry = 1.5   # exp_ada_1.5 修改二: 1.0→1.5（1.4 实测右腿抬升仅左脚 54~64%，强化幅度对称约束）
+            gait_symmetry = 1.2   # exp_ada_1.6 修改三: 1.5→1.2（1.5 速度回退 10~15pp 触发预案；保留尾刺加深结构）
             feet_clearance = 1.  # 回退基线（exp_ada_3 候选A 不改此权重）
             feet_contact_number = 2.0
             # gait
             feet_air_time = 1.2
             foot_slip = -0.1
             feet_distance = 0.3   # exp0.2: 0.2→0.3 增大步宽支撑约束，辅助侧向稳定
+            stance_hip_roll = -1.0  # exp_ada_1.6 修改一: 支撑相髋 roll 偏离 default 平方惩罚（治左脚侧滑）
             knee_distance = 0.2
             # lateral
             lat_vel = -0.6        # exp0.2: 新增侧向线速度线性惩罚（无侧向指令时生效），消除净漂移 -0.094

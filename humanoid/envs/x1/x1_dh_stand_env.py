@@ -306,6 +306,11 @@ class X1DHStandEnv(LeggedRobot):
         self.ref_dof_pos[:, 11] = sin_pos_r * d[11]
 
         self.ref_dof_pos[torch.abs(sin_pos) < 0.1] = 0.
+        # exp_ada_1.6 修改四: 双支撑段踝 pitch 背屈偏置 +0.05（FK 验证: 整脚微抬 2mm，无反向风险）——
+        # 摆动末背屈不被清零，脚跟先触地（人类步态），随负重自然压平。default 后踝角 = -0.21+0.05 = -0.16。
+        ds_mask = torch.abs(sin_pos) < 0.1
+        self.ref_dof_pos[:, 4][ds_mask] = 0.05   # L ankle_pitch 背屈 delta
+        self.ref_dof_pos[:, 10][ds_mask] = 0.05  # R ankle_pitch 背屈 delta（左右同号=物理同向背屈）
         
         # if use_ref_actions=True, action += ref_action
         self.ref_action = 2 * self.ref_dof_pos
@@ -743,6 +748,15 @@ class X1DHStandEnv(LeggedRobot):
         # 侧向指令段豁免以避免与 tracking_lin_vel 的 vy 跟踪冲突
         no_lat_cmd = (torch.abs(self.commands[:, 1]) <= 0.05).float()
         return torch.abs(self.base_lin_vel[:, 1]) * no_lat_cmd
+
+    def _reward_stance_hip_roll(self):
+        """exp_ada_1.6 修改一: 支撑相髋 roll 偏离 default 的平方惩罚（治左脚支撑内倾侧滑）。
+        1.5 实测: 左支撑髋 roll -4.1~-5.3°，偏离 default(+2.9°) 达 7° 且全程晃动，
+        左腿内扣+踝外翻补偿 -> 足底外缘受力 -> 单支撑滑移 11cm/s。仅罚支撑相（contact）。"""
+        contact = self.contact_forces[:, self.feet_indices, 2] > 5.
+        l_err = (self.dof_pos[:, 1] - self.default_dof_pos[0, 1]) * contact[:, 0]
+        r_err = (self.dof_pos[:, 7] - self.default_dof_pos[0, 7]) * contact[:, 1]
+        return torch.sum(torch.square(torch.stack([l_err, r_err], dim=1)), dim=1)
 
     def _reward_track_vel_hard(self):
         """
