@@ -13,7 +13,8 @@
 | exp_ada_1.2 | 2026-09-02 | 抬腿充分性修复（clearance 连续化+weight 1.5+target 0.045 / 踝摆幅解耦 0.6 / nominal 0.55）**失败**：3000 轮内未收敛+多改互相打架，速度跟踪全域崩(0.2/0.4/0.6=48/60/66%、后退 1%)，拖地 24→74% 反升、抬升 30→17mm 反降 | ❌未达标（已测试） | TASK_20260902_141 | limxmt8fxevjvx38jd@emalupe.com | model_3000.pt |
 | exp_ada_1.3 | 2026-09-02 | 候选 A（仅 target_feet_height 0.03→0.045，单点）**失败**：速度回退 0.2/0.4/0.6=69/69/67%、后退 47%，拖地 24→65% 反升；证明 target 上调本身破坏性，反证 1.2 失败元凶=target，候选 A/B 方向关闭 | ❌未达标（已测试） | TASK_20260902_220 | limxmt8fxevjvx38jd@emalupe.com | model_6000.pt |
 | exp_ada_1.4 | 2026-09-03 | 参考轨迹抬脚充分性（FK 扫描定参）：膝 scale 下限 1.0（抬脚主体保满幅）+髋下限 0.85（步态自然）+**踝摆幅符号反转**（跖屈压脚尖→背屈勾脚）；target 回 0.03 基线；L4 从零 6000 轮；三件套已归档，待分析 | ✅已训练（待分析） | TASK_20260903_057 | limxmt8fxevjvx38jd@emalupe.com | model_6000.pt |
-| exp_ada_1.5 | 2026-09-03 | 对称幅度强化：1.4 回放发现右腿摆动相抬升仅左脚 54~64%（分段差 30~46%），sym 尾刺加深 0.2×clamp(0,0.5)→0.3×clamp(0,1.0)+权重 1.0→1.5；保留 1.4 全部改动，从零 6000 轮（新账号 limxmt8fy4rtjlvnxv + 项目 PRO_20260903_014）；4090D（091）运行中，L20（092）并行排队 | 🔄训练中（6000 轮） | TASK_20260903_091 (4090D 运行中) / TASK_20260903_092 (L20 排队) | limxmt8fy4rtjlvnxv@emalupe.com | 待定 |
+| exp_ada_1.5 | 2026-09-03 | 对称幅度强化：1.4 回放发现右腿摆动相抬升仅左脚 54~64%（分段差 30~46%），sym 尾刺加深 0.2×clamp(0,0.5)→0.3×clamp(0,1.0)+权重 1.0→1.5；保留 1.4 全部改动，从零 6000 轮（新账号 limxmt8fy4rtjlvnxv + 项目 PRO_20260903_014）；对称幅度达成（右/左抬升比 64%→95%，双脚 65~78mm 超 5cm 标准），但**速度回退 10~15pp**（sym 1.5 过强）+**左脚侧滑**（左支撑髋 roll 内收 7° 无约束）；4090D（091）两次运行数分钟后死，L20（092）完跑 | ⚠️部分达标（已测试） | TASK_20260903_092 (L20) | limxmt8fy4rtjlvnxv@emalupe.com | model_6000.pt |
+| exp_ada_1.6 | 2026-09-03 | 左脚侧滑修复（微调4，继承 1.5）：新增支撑相髋 roll 稳定惩罚 -1.0 + 步宽 foot_min_dist 0.2→0.25 + sym 权重 1.5→1.2 回撤（触发 1.5 预案）+ 踝双支撑段背屈偏置 +0.05rad（脚跟先着地）；从零 6000 轮，L4 | 🔄训练中（6000 轮） | TASK_20260903_130 | limxmt8fy4rtjlvnxv@emalupe.com | 待定 |
 
 ---
 
@@ -1403,7 +1404,7 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 | num_envs | 4096 |
 | seed | 5 |
 | learning_rate | 1e-5（fixed） |
-| 算力 | L4 或 4090D（起跑快者优先，开训时定） |
+| 算力 | L4（TASK_20260903_130） |
 | 镜像 | BJX00000001 / V000124 |
 | 代码仓库 | GitHub @ main（本节 commit） |
 | 启动命令 | gm-run X1_29_re0_ada/humanoid/scripts/train.py --task=x1_dh_stand --run_name=exp_ada_1_6 --headless --max_iterations=6000 |
@@ -1437,3 +1438,8 @@ self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale
 ### 7. 实验结果
 
 > 待训练完成后补充。
+
+**训练启动记录（2026-09-03 17:20）**：
+
+- 代码 commit `b92ad9c` 已推送 GitHub（env：stance_hip_roll 奖励 + 双支撑踝背屈偏置；config：foot_min_dist 0.25、sym 1.2）
+- L4 任务 TASK_20260903_130 创建并启动（项目 PRO_20260903_014，startScript `--run_name=exp_ada_1_6 --max_iterations=6000`）
