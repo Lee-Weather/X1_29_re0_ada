@@ -315,15 +315,18 @@ class X1DHStandCfg(LeggedRobotCfg):
         # 索引 10 = right_ankle_pitch：X1_12DOF.urdf 右踝轴(0 0 1)与左踝(0 0 -1)反向；
         # 左右 delta 同为 -0.16，经相位取正/取负后 ref 符号相反（左正右负），物理摆动左右对称（exp0 修改二的逆操作）
         final_swing_joint_delta_pos = [0.25, 0.05, -0.11, 0.35, -0.16, 0.0, -0.25, -0.05, 0.11, 0.35, -0.16, 0.0]
-        target_feet_height = 0.045  # exp_ada_3 候选A: 仅此一处从基线 0.03 上调，其余全回退基线
-        target_feet_height_max = 0.06  # 回退基线
+        target_feet_height = 0.03  # 回退基线（clearance 窗口[0.03,0.06]已覆盖 5cm 标准；1.2/1.3 已证伪 target 上调）
+        target_feet_height_max = 0.06
         feet_to_ankle_distance = 0.041
         cycle_time = 0.7
         # exp1.0: 参考轨迹迈步幅度速度自适应（仅 sagittal 关节缩放，roll/yaw 固定）
         # step_scale = clamp(|vx_cmd| / ref_vel_nominal, ref_step_scale_min, ref_step_scale_max)
-        ref_vel_nominal = 0.6      # 回退基线
+        ref_vel_nominal = 0.6      # 基线
         ref_step_scale_min = 0.3   # 低速下限（≈0.18 m/s），防参考步长落入摩擦死区
         ref_step_scale_max = 1.2   # 高速上限，当前域内不触发，仅安全裕量
+        # exp_ada_1.4 修改一(FK 扫描定参, 0.4m/s 抬脚 5cm 标准): 膝=抬脚主体保满幅、髋温和下限、踝背屈由 env 反转
+        ref_knee_scale_min = 1.0
+        ref_hip_scale_min = 0.85
         # exp_ada_1.1 修改六: 左右步态对称奖励的镜像符号（2026-09-01 FK 判别实验实测）：
         # 旧 URDF 左右 hip_pitch/roll/yaw 物理反向(S=-1)，knee/ankle_pitch 同向(S=+1)，ankle_roll 反向(S=-1)
         sym_joint_sign = [-1.0, -1.0, -1.0, 1.0, 1.0, -1.0]

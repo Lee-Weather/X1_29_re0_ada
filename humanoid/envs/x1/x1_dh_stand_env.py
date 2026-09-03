@@ -282,22 +282,27 @@ class X1DHStandEnv(LeggedRobot):
         # 故 sagittal 摆幅按 |vx_cmd| 线性缩放；roll/yaw 与速度弱相关，保持固定
         step_scale = (self.commands[:, 0].abs() / self.cfg.rewards.ref_vel_nominal).clamp(
             self.cfg.rewards.ref_step_scale_min, self.cfg.rewards.ref_step_scale_max)
+        # exp_ada_1.4 修改一: 抬脚充分性(FK 扫描定参, 0.4m/s 标准 5cm):
+        # 膝=抬脚主体(满幅单抬 52.6mm)→低速保持满幅; 髋温和下限(步态自然度, 大腿带小腿);
+        # 踝摆幅符号反转: 现状跖屈压脚尖(-6.4mm)→背屈(+8mm, 勾脚防拖地)
+        knee_scale = step_scale.clamp(min=self.cfg.rewards.ref_knee_scale_min)
+        hip_scale = step_scale.clamp(min=self.cfg.rewards.ref_hip_scale_min)
         d = self.cfg.rewards.final_swing_joint_delta_pos
         # left swing
         sin_pos_l[sin_pos_l > 0] = 0
-        self.ref_dof_pos[:, 0] = -sin_pos_l * d[0] * step_scale  # L hip_pitch
+        self.ref_dof_pos[:, 0] = -sin_pos_l * d[0] * hip_scale   # L hip_pitch
         self.ref_dof_pos[:, 1] = -sin_pos_l * d[1]
         self.ref_dof_pos[:, 2] = -sin_pos_l * d[2]
-        self.ref_dof_pos[:, 3] = -sin_pos_l * d[3] * step_scale  # L knee_pitch
-        self.ref_dof_pos[:, 4] = -sin_pos_l * d[4] * step_scale  # L ankle_pitch
+        self.ref_dof_pos[:, 3] = -sin_pos_l * d[3] * knee_scale  # L knee_pitch
+        self.ref_dof_pos[:, 4] = sin_pos_l * d[4] * step_scale   # L ankle_pitch (符号反转: 跖屈→背屈)
         self.ref_dof_pos[:, 5] = -sin_pos_l * d[5]
         # right
         sin_pos_r[sin_pos_r < 0] = 0
-        self.ref_dof_pos[:, 6] = sin_pos_r * d[6] * step_scale   # R hip_pitch
+        self.ref_dof_pos[:, 6] = sin_pos_r * d[6] * hip_scale    # R hip_pitch
         self.ref_dof_pos[:, 7] = sin_pos_r * d[7]
         self.ref_dof_pos[:, 8] = sin_pos_r * d[8]
-        self.ref_dof_pos[:, 9] = sin_pos_r * d[9] * step_scale   # R knee_pitch
-        self.ref_dof_pos[:, 10] = sin_pos_r * d[10] * step_scale # R ankle_pitch
+        self.ref_dof_pos[:, 9] = sin_pos_r * d[9] * knee_scale   # R knee_pitch
+        self.ref_dof_pos[:, 10] = -sin_pos_r * d[10] * step_scale # R ankle_pitch (符号反转: 跖屈→背屈)
         self.ref_dof_pos[:, 11] = sin_pos_r * d[11]
 
         self.ref_dof_pos[torch.abs(sin_pos) < 0.1] = 0.
