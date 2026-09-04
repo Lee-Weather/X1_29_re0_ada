@@ -184,7 +184,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         update_step = 2000 * 24 # after this count, increase push_duration index
         push_duration = [0, 0.05, 0.1, 0.15, 0.2, 0.25] # increase push duration during training
         max_push_vel_xy = 0.2
-        max_push_ang_vel = 0.4  # exp_ada_1.7 修改七: 0.2→0.4（真机转向换向瞬态 yaw ±2.5rad/s 超原 push 域；训练经历 yaw 暂态仍贴参考摆幅）
+        max_push_ang_vel = 0.2  # exp_ada_1.8 修改八: 0.4→0.2 回撤（1.7 实证 push 0.4 诱导瘸行解：步长不对称 134%+yaw +12~15°+速度 -30pp 三异常同源；1.6 此域内步长对称 96%/yaw +0.4° 全健康）
 
         randomize_base_mass = True
         added_mass_range = [-3, 3] # base mass rand range, base mass is all fix link sum mass
