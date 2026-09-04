@@ -184,7 +184,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         update_step = 2000 * 24 # after this count, increase push_duration index
         push_duration = [0, 0.05, 0.1, 0.15, 0.2, 0.25] # increase push duration during training
         max_push_vel_xy = 0.2
-        max_push_ang_vel = 0.2
+        max_push_ang_vel = 0.4  # exp_ada_1.7 修改七: 0.2→0.4（真机转向换向瞬态 yaw ±2.5rad/s 超原 push 域；训练经历 yaw 暂态仍贴参考摆幅）
 
         randomize_base_mass = True
         added_mass_range = [-3, 3] # base mass rand range, base mass is all fix link sum mass
@@ -314,7 +314,9 @@ class X1DHStandCfg(LeggedRobotCfg):
         # final_swing_joint_pos = final_swing_joint_delta_pos + default_pos
         # 索引 10 = right_ankle_pitch：X1_12DOF.urdf 右踝轴(0 0 1)与左踝(0 0 -1)反向；
         # 左右 delta 同为 -0.16，经相位取正/取负后 ref 符号相反（左正右负），物理摆动左右对称（exp0 修改二的逆操作）
-        final_swing_joint_delta_pos = [0.25, 0.05, -0.11, 0.35, -0.16, 0.0, -0.25, -0.05, 0.11, 0.35, -0.16, 0.0]
+        # exp_ada_1.7 修改五: 膝摆幅 0.35→0.40（FK 满幅单抬 52.6→60mm，全局抬脚 +14%，
+        # 仿真 min 预计 40.9→~46mm，留 sim2real 折减裕量保真机 >=3cm 红线）
+        final_swing_joint_delta_pos = [0.25, 0.05, -0.11, 0.40, -0.16, 0.0, -0.25, -0.05, 0.11, 0.40, -0.16, 0.0]
         target_feet_height = 0.03  # 回退基线（clearance 窗口[0.03,0.06]已覆盖 5cm 标准；1.2/1.3 已证伪 target 上调）
         target_feet_height_max = 0.06
         feet_to_ankle_distance = 0.041
@@ -327,6 +329,9 @@ class X1DHStandCfg(LeggedRobotCfg):
         # exp_ada_1.4 修改一(FK 扫描定参, 0.4m/s 抬脚 5cm 标准): 膝=抬脚主体保满幅、髋温和下限、踝背屈由 env 反转
         ref_knee_scale_min = 1.0
         ref_hip_scale_min = 0.85
+        # exp_ada_1.7 修改五: 踝摆幅保底下限——低速/转向时刻（vx_cmd 回落→step_scale 缩水，真机 22.4mm 低抬步成因）
+        # 踝背屈辅助抬脚不缩水（+2.4→+4.8mm），与膝满幅同向保底
+        ref_ankle_scale_min = 0.6
         # exp_ada_1.1 修改六: 左右步态对称奖励的镜像符号（2026-09-01 FK 判别实验实测）：
         # 旧 URDF 左右 hip_pitch/roll/yaw 物理反向(S=-1)，knee/ankle_pitch 同向(S=+1)，ankle_roll 反向(S=-1)
         sym_joint_sign = [-1.0, -1.0, -1.0, 1.0, 1.0, -1.0]
@@ -337,7 +342,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         max_contact_force = 700  # forces above this value are penalized
         
         class scales:
-            ref_joint_pos = 2.2
+            ref_joint_pos = 2.4  # exp_ada_1.7 修改六: 2.2→2.4 参考跟踪收紧（参考严格左右镜像，执行贴参考越紧对称越好；真机 88% 不对称源在执行偏离）
             gait_symmetry = 1.2   # exp_ada_1.6 修改三: 1.5→1.2（1.5 速度回退 10~15pp 触发预案；保留尾刺加深结构）
             feet_clearance = 1.  # 回退基线（exp_ada_3 候选A 不改此权重）
             feet_contact_number = 2.0

@@ -287,6 +287,8 @@ class X1DHStandEnv(LeggedRobot):
         # 踝摆幅符号反转: 现状跖屈压脚尖(-6.4mm)→背屈(+8mm, 勾脚防拖地)
         knee_scale = step_scale.clamp(min=self.cfg.rewards.ref_knee_scale_min)
         hip_scale = step_scale.clamp(min=self.cfg.rewards.ref_hip_scale_min)
+        # exp_ada_1.7 修改五: 踝摆幅保底下限——低速/转向时刻 step_scale 缩水时踝背屈辅助不缩水（+2.4→+4.8mm）
+        ankle_scale = step_scale.clamp(min=self.cfg.rewards.ref_ankle_scale_min)
         d = self.cfg.rewards.final_swing_joint_delta_pos
         # left swing
         sin_pos_l[sin_pos_l > 0] = 0
@@ -294,7 +296,7 @@ class X1DHStandEnv(LeggedRobot):
         self.ref_dof_pos[:, 1] = -sin_pos_l * d[1]
         self.ref_dof_pos[:, 2] = -sin_pos_l * d[2]
         self.ref_dof_pos[:, 3] = -sin_pos_l * d[3] * knee_scale  # L knee_pitch
-        self.ref_dof_pos[:, 4] = sin_pos_l * d[4] * step_scale   # L ankle_pitch (符号反转: 跖屈→背屈)
+        self.ref_dof_pos[:, 4] = sin_pos_l * d[4] * ankle_scale   # L ankle_pitch (符号反转: 跖屈→背屈)
         self.ref_dof_pos[:, 5] = -sin_pos_l * d[5]
         # right
         sin_pos_r[sin_pos_r < 0] = 0
@@ -302,7 +304,7 @@ class X1DHStandEnv(LeggedRobot):
         self.ref_dof_pos[:, 7] = sin_pos_r * d[7]
         self.ref_dof_pos[:, 8] = sin_pos_r * d[8]
         self.ref_dof_pos[:, 9] = sin_pos_r * d[9] * knee_scale   # R knee_pitch
-        self.ref_dof_pos[:, 10] = -sin_pos_r * d[10] * step_scale # R ankle_pitch (符号反转: 跖屈→背屈)
+        self.ref_dof_pos[:, 10] = -sin_pos_r * d[10] * ankle_scale # R ankle_pitch (符号反转: 跖屈→背屈)
         self.ref_dof_pos[:, 11] = sin_pos_r * d[11]
 
         self.ref_dof_pos[torch.abs(sin_pos) < 0.1] = 0.
