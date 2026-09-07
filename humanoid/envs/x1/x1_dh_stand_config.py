@@ -316,7 +316,9 @@ class X1DHStandCfg(LeggedRobotCfg):
         # 左右 delta 同为 -0.16，经相位取正/取负后 ref 符号相反（左正右负），物理摆动左右对称（exp0 修改二的逆操作）
         # exp_ada_1.7 修改五: 膝摆幅 0.35→0.40（FK 满幅单抬 52.6→60mm，全局抬脚 +14%，
         # 仿真 min 预计 40.9→~46mm，留 sim2real 折减裕量保真机 >=3cm 红线）
-        final_swing_joint_delta_pos = [0.25, 0.05, -0.11, 0.40, -0.16, 0.0, -0.25, -0.05, 0.11, 0.40, -0.16, 0.0]
+        # exp_ada_1.9 修改十一: L 膝 delta[3] 0.40→0.42 定向微补偿（1.8 实测 L 摆幅全面≥R 但抬脚低 6.8mm@0.4 档
+        # → 左右执行增益差，镜像轨迹管不到；膝为抬脚主体，+0.02 理论 +2.6mm、执行放大 ≈4~5mm 对准缺口）
+        final_swing_joint_delta_pos = [0.25, 0.05, -0.11, 0.42, -0.16, 0.0, -0.25, -0.05, 0.11, 0.40, -0.16, 0.0]
         target_feet_height = 0.03  # 回退基线（clearance 窗口[0.03,0.06]已覆盖 5cm 标准；1.2/1.3 已证伪 target 上调）
         target_feet_height_max = 0.06
         feet_to_ankle_distance = 0.041
@@ -353,7 +355,8 @@ class X1DHStandCfg(LeggedRobotCfg):
             stance_hip_roll = -1.0  # exp_ada_1.6 修改一: 支撑相髋 roll 偏离 default 平方惩罚（治左脚侧滑）
             knee_distance = 0.2
             # lateral
-            lat_vel = -0.6        # exp0.2: 新增侧向线速度线性惩罚（无侧向指令时生效），消除净漂移 -0.094
+            lat_vel = -1.0        # exp_ada_1.9 修改十: -0.6→-1.0（1.6 平移侧移 -41mm/步、1.8 残余 -9.3mm/步；线性项压步进式落脚侧移）
+            heading_drift = -0.3  # exp_ada_1.9 修改九: yaw 积分闭环软惩罚（无 yaw 指令时 |yaw| 线性；tracking_ang_vel 速率级 exp 碗对 -0.073rad/s 慢漂梯度≈0）
             # contact 
             feet_contact_forces = -0.01
             # vel tracking
