@@ -126,5 +126,6 @@ def diagnose(csv, tag):
               f"track_err rms: hip={np.sqrt((te_hp**2).mean())*180/np.pi:.1f}° knee={np.sqrt((te_kn**2).mean())*180/np.pi:.1f}°")
 
 
+diagnose('czy/data/exp_ada_1.9/isaac_diag.csv', 'exp_ada_1.9（本轮验收）')
 diagnose('czy/data/exp_ada_1.7/isaac_diag.csv', 'exp_ada_1.7（用户观察：左步小右步大）')
 diagnose('czy/data/exp_ada_1.6/isaac_diag.csv', 'exp_ada_1.6（对照）')

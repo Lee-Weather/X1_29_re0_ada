@@ -208,7 +208,8 @@ def step_len(csv, tag, phase_sign):
     print(f"     摆动占空比(行进段): L={lsw.sum()/max(mov.sum(),1)*100:.0f}% R={rsw.sum()/max(mov.sum(),1)*100}%")
 
 
-for csv, tag in [('czy/data/exp_ada_1.8/isaac_diag.csv', 'exp_ada_1.8'),
+for csv, tag in [('czy/data/exp_ada_1.9/isaac_diag.csv', 'exp_ada_1.9'),
+                 ('czy/data/exp_ada_1.8/isaac_diag.csv', 'exp_ada_1.8'),
                  ('czy/data/exp_ada_1.7/isaac_diag.csv', 'exp_ada_1.7'),
                  ('czy/data/exp_ada_1.6/isaac_diag.csv', 'exp_ada_1.6')]:
     df, ps = lift_and_track(csv, tag)
