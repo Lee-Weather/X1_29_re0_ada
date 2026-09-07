@@ -355,8 +355,9 @@ class X1DHStandCfg(LeggedRobotCfg):
             stance_hip_roll = -1.0  # exp_ada_1.6 修改一: 支撑相髋 roll 偏离 default 平方惩罚（治左脚侧滑）
             knee_distance = 0.2
             # lateral
-            lat_vel = -1.0        # exp_ada_1.9 修改十: -0.6→-1.0（1.6 平移侧移 -41mm/步、1.8 残余 -9.3mm/步；线性项压步进式落脚侧移）
+            lat_vel = -0.6        # exp_ada_1.10 修改十二: -1.0→-0.6 回撤（1.9 证 -1.0 未压小 vy 反诱发弧线；1.8 域内 -0.6 世界侧移 -9.3mm 已近达标线）
             heading_drift = -0.3  # exp_ada_1.9 修改九: yaw 积分闭环软惩罚（无 yaw 指令时 |yaw| 线性；tracking_ang_vel 速率级 exp 碗对 -0.073rad/s 慢漂梯度≈0）
+            ang_vel_yaw_drift = -1.0  # exp_ada_1.10 修改十三: 无 yaw 指令域恒定慢转弯惩罚 |yaw_rate| 线性（1.9 弧线=主动 3.8°/s 恒定转弯，tracking 碗底罚 0.022/heading 前期零梯度均管不住；本项每步恒定代价第一步即有梯度）
             # contact 
             feet_contact_forces = -0.01
             # vel tracking

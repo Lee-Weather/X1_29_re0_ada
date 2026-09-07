@@ -764,6 +764,17 @@ class X1DHStandEnv(LeggedRobot):
         no_yaw_cmd = (torch.abs(self.commands[:, 2]) <= 0.05).float()
         return torch.abs(yaw_w) * no_yaw_cmd
 
+    def _reward_ang_vel_yaw_drift(self):
+        """exp_ada_1.10 修改十三: 无 yaw 指令域的恒定慢转弯惩罚（速率级线性）。
+        1.9 深度归因（diag_19_arc.py）：弧线 = 策略主动恒定 yaw_rate +3.8°/s（0.066rad/s，
+        四档一致，yaw(t) 线性 R²≈0.99）——tracking_ang_vel exp 碗底仅罚 0.022、heading_drift
+        线性项前期零梯度，均管不住起点。本项每步恒定代价、从第一步即有梯度。
+        无 yaw 指令时生效（no_yaw_cmd 豁免，真转弯不受影响）；base_ang_vel 由基类
+        _init_buffers 初始化（root_states 初始为零），无 base_euler_xyz 式时序坑。"""
+        no_yaw_cmd = (torch.abs(self.commands[:, 2]) <= 0.05).float()
+        wz = wrap_to_pi(self.base_ang_vel[:, 2].clone())
+        return torch.abs(wz) * no_yaw_cmd
+
     def _reward_stance_hip_roll(self):
         """exp_ada_1.6 修改一: 支撑相髋 roll 偏离 default 的平方惩罚（治左脚支撑内倾侧滑）。
         1.5 实测: 左支撑髋 roll -4.1~-5.3°，偏离 default(+2.9°) 达 7° 且全程晃动，
