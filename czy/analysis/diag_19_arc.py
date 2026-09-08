@@ -166,5 +166,6 @@ def diagnose(csv, tag):
             print(f"  Q3 落脚点(基座系) {s}: 前向x median={np.median(fbx[m])*1000:+.1f}mm  侧向y median={np.median(fsd[m])*1000:+.1f}mm")
 
 if __name__ == '__main__':
+    diagnose('czy/data/exp_ada_1.10/isaac_diag.csv', 'exp_ada_1.10')
     diagnose('czy/data/exp_ada_1.9/isaac_diag.csv', 'exp_ada_1.9')
     diagnose('czy/data/exp_ada_1.8/isaac_diag.csv', 'exp_ada_1.8')

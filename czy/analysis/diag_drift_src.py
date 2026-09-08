@@ -87,6 +87,7 @@ def diagnose(csv, tag):
 
 
 if __name__ == '__main__':
+    diagnose('czy/data/exp_ada_1.10/isaac_diag.csv', 'exp_ada_1.10')
     diagnose('czy/data/exp_ada_1.9/isaac_diag.csv', 'exp_ada_1.9')
     diagnose('czy/data/exp_ada_1.8/isaac_diag.csv', 'exp_ada_1.8')
     diagnose('czy/data/exp_ada_1.6/isaac_diag.csv', 'exp_ada_1.6')
