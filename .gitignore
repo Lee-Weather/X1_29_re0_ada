@@ -6,6 +6,7 @@ __pycache__/
 # 训练/日志产物（大文件、二进制、可再生成）
 logs/
 czy/data/
+czy/diff/
 *.log
 *.pt
 *.mp4
