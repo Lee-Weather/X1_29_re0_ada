@@ -590,9 +590,6 @@ class X1DHStandEnv(LeggedRobot):
         self.sym_half_steps = int(self.cfg.rewards.cycle_time / 2 /
                                   (self.cfg.sim.dt * self.cfg.control.decimation))
         self.sym_hist = torch.zeros(self.num_envs, self.sym_half_steps, 6, device=self.device)
-        # exp_ada_1.9 修改九: base_euler_xyz 预初始化——compute_reward 在 compute_observations
-        # （其中更新 base_euler_xyz）之前调用，首步 heading_drift 需已有该属性
-        self.base_euler_xyz = torch.zeros(self.num_envs, 3, device=self.device)
 
 # ================================================ Rewards ================================================== #
     def _reward_ref_joint_pos(self):
@@ -753,27 +750,6 @@ class X1DHStandEnv(LeggedRobot):
         # 侧向指令段豁免以避免与 tracking_lin_vel 的 vy 跟踪冲突
         no_lat_cmd = (torch.abs(self.commands[:, 1]) <= 0.05).float()
         return torch.abs(self.base_lin_vel[:, 1]) * no_lat_cmd
-
-    def _reward_heading_drift(self):
-        """exp_ada_1.9 修改九: yaw 积分闭环软惩罚（治旋转弧线漂移）。
-        1.8 实测 0.6 档 yaw -4.2°/s 持续、10s 漂 -20°：tracking_ang_vel 速率级 exp 碗
-        对 -0.073rad/s 慢漂梯度≈0（exp(-0.027·5)≈0.97 无修正力），需角度积分量闭环。
-        无 yaw 指令时生效（同 lat_vel 豁免模式）；base_euler_xyz 由 get_euler 返回 [0,2π)
-        需重 wrap 到 [-π,π] 否则过 ±π 跳变会爆惩罚。线性无 exp 碗，保持慢漂梯度。"""
-        yaw_w = wrap_to_pi(self.base_euler_xyz[:, 2].clone())
-        no_yaw_cmd = (torch.abs(self.commands[:, 2]) <= 0.05).float()
-        return torch.abs(yaw_w) * no_yaw_cmd
-
-    def _reward_ang_vel_yaw_drift(self):
-        """exp_ada_1.10 修改十三: 无 yaw 指令域的恒定慢转弯惩罚（速率级线性）。
-        1.9 深度归因（diag_19_arc.py）：弧线 = 策略主动恒定 yaw_rate +3.8°/s（0.066rad/s，
-        四档一致，yaw(t) 线性 R²≈0.99）——tracking_ang_vel exp 碗底仅罚 0.022、heading_drift
-        线性项前期零梯度，均管不住起点。本项每步恒定代价、从第一步即有梯度。
-        无 yaw 指令时生效（no_yaw_cmd 豁免，真转弯不受影响）；base_ang_vel 由基类
-        _init_buffers 初始化（root_states 初始为零），无 base_euler_xyz 式时序坑。"""
-        no_yaw_cmd = (torch.abs(self.commands[:, 2]) <= 0.05).float()
-        wz = wrap_to_pi(self.base_ang_vel[:, 2].clone())
-        return torch.abs(wz) * no_yaw_cmd
 
     def _reward_stance_hip_roll(self):
         """exp_ada_1.6 修改一: 支撑相髋 roll 偏离 default 的平方惩罚（治左脚支撑内倾侧滑）。
