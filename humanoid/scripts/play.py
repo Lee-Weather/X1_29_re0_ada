@@ -252,7 +252,9 @@ def play(args):
                             "cmd_linear_x", "cmd_linear_y", "cmd_angular_z",
                             "base_euler_x", "base_euler_y", "base_euler_z",
                             "base_ang_vel_x", "base_ang_vel_y", "base_ang_vel_z",
-                            "clip_count"]}
+                            "clip_count",
+                            # exp_ada_1.11 离线 LCP 诊断：策略 Lipschitz 常数（对 actor 输入的雅可比）
+                            "lcp_jac_frob", "lcp_frac_short", "lcp_sigma_w"]}
     for side in SIDES:
         for j in JOINT_NAMES:
             diag[f"action_{side}_{j}_joint"] = []
@@ -268,9 +270,43 @@ def play(args):
     step_accum = 0      # 步数计数器
     # ===========================================
 
+    # =========== exp_ada_1.11 离线 LCP 诊断 ===========
+    # 测策略对输入的敏感度（Lipschitz 常数），判断 LCP 正则是否有对象可罚。
+    # s = actor 输入（235 短历史 + 64 CNN + 3 状态估计 = 302 维），与 LCP 方案 A 的求导目标一致。
+    # 指标：‖∂μ/∂s‖_F（12×302 雅可比 Frobenius 范数）、能量在短历史段占比、σ 加权范数。
+    _ac = ppo_runner.alg.actor_critic
+    _n_short = _ac.num_short_obs
+    _n_cnn = _ac.long_history[-1].out_features
+    print(f"[LCP diag] s = {_n_short}(短历史) + {_n_cnn}(CNN) + 3(状态估计)")
+
+    def _lcp_metrics(o):
+        with torch.no_grad():
+            sh = o[:, -_n_short:]
+            es = _ac.state_estimator(sh)
+            lh = _ac.long_history(o.view(-1, _ac.in_channels, _ac.num_proprio_obs))
+            s = torch.cat((sh, es, lh), dim=-1).detach()
+        s.requires_grad_(True)
+        mu = _ac.actor(s)                                  # [N, 12]
+        J = torch.stack([torch.autograd.grad(mu[:, k].sum(), s, retain_graph=True)[0]
+                         for k in range(mu.shape[1])])     # [12, N, D]
+        e = J.pow(2)
+        frob = e.sum(dim=(0, 2)).sqrt()                    # [N] ‖∂μ/∂s‖_F
+        e_dim = e.sum(dim=0)                               # [N, D] 每个输入维的梯度能量
+        frac_short = e_dim[:, :_n_short].sum(-1) / e_dim.sum(dim=-1).clamp_min(1e-12)
+        e_act = e.sum(dim=2)                               # [12, N] 每个动作维的能量
+        sig_w = (e_act / _ac.std.detach().pow(2).unsqueeze(1)).sum(dim=0).sqrt()
+        return frob.detach(), frac_short.detach(), sig_w.detach()
+    # ================================================
+
     for i in range(TOTAL_PLAY_STEPS):
 
         actions = policy(obs.detach()) # * 0.
+
+        # exp_ada_1.11 离线 LCP 诊断：记录策略 Lipschitz 常数
+        _frob, _fs, _sw = _lcp_metrics(obs.detach())
+        diag["lcp_jac_frob"].append(_frob[robot_index].item())
+        diag["lcp_frac_short"].append(_fs[robot_index].item())
+        diag["lcp_sigma_w"].append(_sw[robot_index].item())
 
         if FIX_COMMAND:
             # 速度阶梯：0 → 0.6 → 0
@@ -527,7 +563,8 @@ def play(args):
               + ["phase_sin", "phase_cos", "cycle_time", "smoothed_speed", "active_stage",
                  "cmd_linear_x", "cmd_linear_y", "cmd_angular_z",
                  "base_euler_x", "base_euler_y", "base_euler_z",
-                 "base_ang_vel_x", "base_ang_vel_y", "base_ang_vel_z", "clip_count"]
+                 "base_ang_vel_x", "base_ang_vel_y", "base_ang_vel_z", "clip_count",
+                 "lcp_jac_frob", "lcp_frac_short", "lcp_sigma_w"]
               + joint_cols)
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -545,7 +582,8 @@ def play(args):
                    diag["cmd_linear_x"][i], diag["cmd_linear_y"][i], diag["cmd_angular_z"][i],
                    diag["base_euler_x"][i], diag["base_euler_y"][i], diag["base_euler_z"][i],
                    diag["base_ang_vel_x"][i], diag["base_ang_vel_y"][i], diag["base_ang_vel_z"][i],
-                   diag["clip_count"][i]]
+                   diag["clip_count"][i],
+                   diag["lcp_jac_frob"][i], diag["lcp_frac_short"][i], diag["lcp_sigma_w"][i]]
             for side in SIDES:
                 for j in JOINT_NAMES:
                     row += [diag[f"action_{side}_{j}_joint"][i], diag[f"pos_{side}_{j}_joint"][i],
