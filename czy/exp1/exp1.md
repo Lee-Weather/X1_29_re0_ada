@@ -2107,3 +2107,42 @@ Q3 转弯动作特征 = 倾斜转弯（banked turn）+ 足位前后错位力偶�
 3. **权重绝不能照搬 MimicKit 的 0.002**：实测 LCP loss（原式 Σ_a‖J_a‖²/σ_a²）= σ加权² ≈ **1925 / 1662 / 2091**；学习到的 σ ≈ **0.15~0.17**（非 init 1.0）。取 w=0.002 → 贡献 ≈3.3~4.2，与 PPO surrogate 同量级甚至更大，**会主导训练**。若将来引入，应从 **1e-4 量级**起步。
 
 **决策**：LCP **不纳入** 1.11/1.12 修复路线（前提证伪）。作为独立的 sim2real 增强项候选挂起；若引入需 (a) 方案 A（对 302 维 actor 输入求导，便宜且作用点明确）、(b) 权重 1e-4 起步、(c) 注意 σ 可学习带来的 1/σ² 耦合。
+
+---
+
+## 实验 exp_ada_1.12：引入 LCP 平滑正则（用户决策；定位为 sim2real 增强，非 jitter/弧线修复）
+
+### §1 背景与定位
+
+§10 离线测量已**证伪**"策略陡峭导致抖动/弧线"的前提（1.9/1.10 反而比 1.8 更平滑，Lipschitz 与抖动相关性 ≈0）。用户仍决定引入 LCP——**定位明确为 sim2real 鲁棒性增强项**（降低策略对观测噪声/动力学差异的敏感度），**不期待**它修复当前的 jitter/弧线问题。
+
+### §2 实现（4 处改动）
+
+| # | 文件 | 改动 |
+| --- | --- | --- |
+| 1 | [actor_critic_dh.py](file:///e:/X1/F1_one/X1_29_re0_ada/humanoid/algo/ppo/actor_critic_dh.py) | 抽出 `_build_actor_obs()`，`act()` / `act_inference()` 复用（纯重构，行为不变，保证三处构造一致） |
+| 2 | [dh_ppo.py](file:///e:/X1/F1_one/X1_29_re0_ada/humanoid/algo/ppo/dh_ppo.py) | 新增 `lcp_weight` 参数 + `update()` 内 LCP 项 + 返回值扩展为 4 元组 |
+| 3 | [dh_on_policy_runner.py](file:///e:/X1/F1_one/X1_29_re0_ada/humanoid/algo/ppo/dh_on_policy_runner.py) | 解包 4 元组 + TB 记录 `Loss/lcp` + 控制台打印 `LCP loss` |
+| 4 | [x1_dh_stand_config.py](file:///e:/X1/F1_one/X1_29_re0_ada/humanoid/envs/x1/x1_dh_stand_config.py) | `algorithm.lcp_weight = 1e-4` |
+
+### §3 三个关键设计决策
+
+1. **方案 A（对 302 维 actor 输入求导，不穿 CNN/状态估计器）**：`lcp_s = _build_actor_obs(obs_batch).detach().requires_grad_(True)` —— 显式叶子化。便宜（梯度张量 24576×302 ≈30MB）、作用点明确（93.7% 敏感度在短历史段）、且不干扰 state_estimator 的 MSE 监督。
+2. **σ 取 detach（关键）**：LCP loss = Σ_a‖J_a‖²/σ_a²，若 σ 可训练，优化器可用「放大 σ」而非「平滑策略」降低该项（**退化解**，且污染探索噪声）。论文用 FIXED σ，故 detach 后梯度方向与论文等价（1/σ² 仅为常数因子）。
+3. **始终计算该项（即使 weight=0）**：否则无法对比「开/关」两种训练下策略陡峭度的真实差异——而这是验证 LCP 是否有效的核心指标。代价是 ~10% 开销。
+
+### §4 冒烟测试（服务器 A6000，20 轮 × 2）
+
+| 项 | 结果 |
+| --- | --- |
+| 功能 | weight=1e-4 时 `LCP loss` 正常输出（iter 16~20: 2.17→5.60）；weight=0 时改为记录真实值（iter 7~10: 0.27→0.57） |
+| 报错 | 无（double backprop 在 4096 env × 24576 minibatch 下正常） |
+| 迭代耗时 | **有 LCP 中位 3.39s vs 基线 3.09s ≈ +10%**（可接受；6000 轮 ≈ +30min） |
+| 显存 | 4096 env 无 OOM |
+
+### §5 监控点与风险
+
+1. **LCP loss 非平稳增长**：冒烟中 10 轮内从 0.27 涨到 5.6（≈10×）——早期策略从近随机变"果断"，雅可比范数自然上升。**固定权重意味着 LCP 的相对影响力随训练增长**（iter20 时贡献 5.6e-4 ≈ surrogate 0.005 的 11%）。需在正式训练中观察它是否最终被压低，而非持续膨胀。
+2. **验证方法**：跑一对同 commit、仅 `lcp_weight` 不同的训练（1e-4 vs 0），对比末期 `Loss/lcp` 曲线 —— 若 LCP 组显著更低，说明生效。
+3. **风险**：若 LCP loss 持续膨胀而非收敛，说明权重过小或被其他梯度压倒 → 预案升到 5e-4 / 1e-3。
+4. **不期待**：jitter、弧线、对称性指标改善（§10 已证前提不成立）；若这些指标反而回退，则 LCP 在此项目应停用。

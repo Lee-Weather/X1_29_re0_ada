@@ -33,6 +33,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.distributions import Normal
 
 from .actor_critic_dh import ActorCriticDH
 from .rollout_storage import RolloutStorage
@@ -54,6 +55,7 @@ class DHPPO:
                  use_clipped_value_loss=True,
                  schedule="fixed",
                  desired_kl=0.01,
+                 lcp_weight=0.0,
                  device='cpu',
                  ):
 
@@ -83,6 +85,7 @@ class DHPPO:
         self.lam = lam
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
+        self.lcp_weight = lcp_weight
         self.num_short_obs = self.actor_critic.num_short_obs
         self.lin_vel_idx = lin_vel_idx
 
@@ -127,6 +130,7 @@ class DHPPO:
         mean_value_loss = 0
         mean_surrogate_loss = 0
         mean_state_estimator_loss = 0
+        mean_lcp_loss = 0
 
         generator = self.storage.mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
         for obs_batch, critic_obs_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
@@ -174,11 +178,28 @@ class DHPPO:
                 else:
                     value_loss = (returns_batch - value_batch).pow(2).mean()
 
+                # LCP 平滑正则（Lipschitz-Constrained Policies）
+                # 对 actor 输入 s（302 维派生特征）压低 logπ 对 s 的梯度范数 —— 方案A：
+                # s 显式 detach 成叶子节点，梯度只回传到 actor MLP（不穿 CNN/状态估计器）。
+                # create_graph=True 使该项自身可训练（double backprop）。
+                # 关键：σ 取 detach —— 否则优化器可用「放大 σ」而非「平滑策略」来降低该项
+                # （LCP loss = Σ_a‖J_a‖²/σ_a²，σ→∞ 即退化解），且会污染探索噪声。
+                # 论文用 FIXED σ，故 detach 后与论文梯度方向等价（1/σ² 仅为常数因子）。
+                # 始终计算该项（weight=0 时不影响训练，但可用于「开/关」对比策略陡峭度是否真被压低）
+                lcp_s = self.actor_critic._build_actor_obs(obs_batch).detach().requires_grad_(True)
+                lcp_dist = Normal(self.actor_critic.actor(lcp_s), self.actor_critic.std.detach())
+                lcp_logp = lcp_dist.log_prob(actions_batch).sum(dim=-1)
+                lcp_g = torch.autograd.grad(lcp_logp, lcp_s,
+                                            grad_outputs=torch.ones_like(lcp_logp),
+                                            create_graph=True, retain_graph=True)[0]
+                lcp_loss = torch.sum(torch.square(lcp_g), dim=-1).mean()
+
                 # update all actor_critic.parameters()
                 loss = (surrogate_loss + 
                         self.value_loss_coef * value_loss - 
                         self.entropy_coef * entropy_batch.mean() +
-                        torch.nn.MSELoss()(est_lin_vel, ref_lin_vel))
+                        torch.nn.MSELoss()(est_lin_vel, ref_lin_vel) +
+                        self.lcp_weight * lcp_loss)
                 
                 # Gradient step
                 self.optimizer.zero_grad()
@@ -191,11 +212,13 @@ class DHPPO:
                 mean_value_loss += value_loss.item()
                 mean_surrogate_loss += surrogate_loss.item()
                 mean_state_estimator_loss += state_estimator_loss.item()
+                mean_lcp_loss += lcp_loss.item()
 
         num_updates = self.num_learning_epochs * self.num_mini_batches
         mean_value_loss /= num_updates
         mean_surrogate_loss /= num_updates
         mean_state_estimator_loss /= num_updates
+        mean_lcp_loss /= num_updates
         self.storage.clear()
 
-        return mean_value_loss, mean_surrogate_loss, mean_state_estimator_loss
+        return mean_value_loss, mean_surrogate_loss, mean_state_estimator_loss, mean_lcp_loss

@@ -161,11 +161,16 @@ class ActorCriticDH(nn.Module):
         mean = self.actor(observations)
         self.distribution = Normal(mean, mean*0. + self.std)
 
-    def act(self, observations, **kwargs):
+    def _build_actor_obs(self, observations):
+        """actor 输入构造（act / act_inference / LCP 共用，保证三处一致）。
+        235 短历史 + 3 状态估计 + 64 CNN = 302 维。"""
         short_history = observations[...,-self.num_short_obs:]
         es_vel = self.state_estimator(short_history)
         compressed_long_history = self.long_history(observations.view(-1, self.in_channels, self.num_proprio_obs))
-        actor_obs = torch.cat((short_history, es_vel, compressed_long_history),dim=-1)
+        return torch.cat((short_history, es_vel, compressed_long_history),dim=-1)
+
+    def act(self, observations, **kwargs):
+        actor_obs = self._build_actor_obs(observations)
         self.update_distribution(actor_obs)
         return self.distribution.sample()
     
@@ -173,12 +178,8 @@ class ActorCriticDH(nn.Module):
         return self.distribution.log_prob(actions).sum(dim=-1)
 
     def act_inference(self, observations):
-        short_history = observations[...,-self.num_short_obs:]
-        es_vel = self.state_estimator(short_history)
-        compressed_long_history = self.long_history(observations.view(-1, self.in_channels, self.num_proprio_obs))
-        actor_obs = torch.cat((short_history, es_vel, compressed_long_history),dim=-1)
-        actions_mean = self.actor(actor_obs)
-        return actions_mean
+        actor_obs = self._build_actor_obs(observations)
+        return self.actor(actor_obs)
 
     def evaluate(self, critic_observations, **kwargs):
         value = self.critic(critic_observations)

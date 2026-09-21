@@ -412,6 +412,10 @@ class X1DHStandCfgPPO(LeggedRobotCfgPPO):
     class algorithm(LeggedRobotCfgPPO.algorithm):
         entropy_coef = 0.001
         learning_rate = 1e-5
+        # exp_ada_1.12 LCP 平滑正则（Lipschitz-Constrained Policies，方案A：对 302 维 actor 输入求导）
+        # 离线实测 LCP loss ≈ 1925（学习到的 σ≈0.17）；w=1e-4 → 贡献 ≈0.19（温和，不干扰 PPO）
+        # MimicKit 原配 0.002 会使贡献 ≈3.9，与 PPO surrogate 同量级甚至更大，会主导训练，不可照搬
+        lcp_weight = 1e-4
         num_learning_epochs = 2
         gamma = 0.994
         lam = 0.9
