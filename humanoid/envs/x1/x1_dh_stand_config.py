@@ -412,10 +412,12 @@ class X1DHStandCfgPPO(LeggedRobotCfgPPO):
     class algorithm(LeggedRobotCfgPPO.algorithm):
         entropy_coef = 0.001
         learning_rate = 1e-5
-        # exp_ada_1.12 LCP 平滑正则（Lipschitz-Constrained Policies，方案A：对 302 维 actor 输入求导）
-        # 1.11l A/B 实测：1e-4 即致瘫（reward 86 vs 193，track 2% vs 87%，策略选择"站立不动"最小化 LCP 项）
-        # → 默认关闭 0.0；代码保留供未来域随机化路线参考
-        lcp_weight = 0.0
+        # exp2.0: LCP 平滑正则（Lipschitz-Constrained Policies，算法层——不在 MDP/rewards 里）
+        # 1.11l（w=1e-4，无 warmup）失效机理：策略退化为"时间恒定动作输出"（μ=const，Δaction 塌到 3~10%，
+        # 蹲姿、双脚 0% 离地、16 项奖励同时变差）——LCP 二阶梯度压倒 PPO 一阶任务梯度，起爆于 step~504（学步关键期）。
+        # exp2.0 对策：(1) warmup 1500 轮纯任务训练（步态先成为强吸引子）；(2) 权重降到 1e-5。
+        lcp_weight = 1e-5
+        lcp_warmup_iters = 1500
         num_learning_epochs = 2
         gamma = 0.994
         lam = 0.9

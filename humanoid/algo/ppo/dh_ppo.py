@@ -56,6 +56,7 @@ class DHPPO:
                  schedule="fixed",
                  desired_kl=0.01,
                  lcp_weight=0.0,
+                 lcp_warmup_iters=0,
                  device='cpu',
                  ):
 
@@ -86,6 +87,8 @@ class DHPPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
         self.lcp_weight = lcp_weight
+        self.lcp_warmup_iters = lcp_warmup_iters   # exp2.0: 前 N 轮不启用 LCP（纯任务梯度学步）
+        self.lcp_iter = 0
         self.num_short_obs = self.actor_critic.num_short_obs
         self.lin_vel_idx = lin_vel_idx
 
@@ -131,6 +134,13 @@ class DHPPO:
         mean_surrogate_loss = 0
         mean_state_estimator_loss = 0
         mean_lcp_loss = 0
+        mean_jac_proxy = 0
+
+        # exp2.0: LCP 延迟启用（warmup）——前 lcp_warmup_iters 轮用纯任务梯度学步，
+        # 避免在学步关键期（1.11l 实测 step~504 起爆）被 LCP 二阶梯度压平。
+        # 注意 lcp_loss 仍始终计算并记录，仅权重被 gate（保留监控能力）。
+        self.lcp_iter += 1
+        lcp_w = self.lcp_weight if self.lcp_iter >= self.lcp_warmup_iters else 0.0
 
         generator = self.storage.mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
         for obs_batch, critic_obs_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
@@ -194,12 +204,19 @@ class DHPPO:
                                             create_graph=True, retain_graph=True)[0]
                 lcp_loss = torch.sum(torch.square(lcp_g), dim=-1).mean()
 
+                # exp2.0 监控：估算 ‖∂μ/∂s‖_F（回放实测口径）。
+                # ∂logπ/∂s = Σ_a (a_a-μ_a)/σ_a² · ∂μ_a/∂s，取期望后 sqrt(lcp_loss) = sqrt(Σ_a‖J_a‖²/σ_a²)，
+                # 乘 σ 均值即还原为 ‖∂μ/∂s‖_F。校验：1.11 实测 36.7×0.177=6.5（实测 6.60）✓
+                #                      1.11l 实测 5.9×0.179=1.06（实测 1.13）✓
+                # 止损线：若该值塌到对照组（1.11 的 6.6）30% 以下 → 策略被压平，立即停训。
+                jac_proxy = torch.sqrt(lcp_loss.detach() + 1e-12) * self.actor_critic.std.detach().mean()
+
                 # update all actor_critic.parameters()
                 loss = (surrogate_loss + 
                         self.value_loss_coef * value_loss - 
                         self.entropy_coef * entropy_batch.mean() +
                         torch.nn.MSELoss()(est_lin_vel, ref_lin_vel) +
-                        self.lcp_weight * lcp_loss)
+                        lcp_w * lcp_loss)
                 
                 # Gradient step
                 self.optimizer.zero_grad()
@@ -213,12 +230,14 @@ class DHPPO:
                 mean_surrogate_loss += surrogate_loss.item()
                 mean_state_estimator_loss += state_estimator_loss.item()
                 mean_lcp_loss += lcp_loss.item()
+                mean_jac_proxy += jac_proxy.item()
 
         num_updates = self.num_learning_epochs * self.num_mini_batches
         mean_value_loss /= num_updates
         mean_surrogate_loss /= num_updates
         mean_state_estimator_loss /= num_updates
         mean_lcp_loss /= num_updates
+        mean_jac_proxy /= num_updates
         self.storage.clear()
 
-        return mean_value_loss, mean_surrogate_loss, mean_state_estimator_loss, mean_lcp_loss
+        return mean_value_loss, mean_surrogate_loss, mean_state_estimator_loss, mean_lcp_loss, mean_jac_proxy
