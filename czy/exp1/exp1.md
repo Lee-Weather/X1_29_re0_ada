@@ -2316,3 +2316,62 @@ Q3 转弯动作特征 = 倾斜转弯（banked turn）+ 足位前后错位力偶�
 - **权重上调寻优**：exp2.0 的 jac_frob 2.933 仍有下降空间（1.11l 到 1.132 才瘫痪，说明 1.1~2.9 之间是安全区）。可试 w=3e-5 / 1e-4（保持 warmup 1500），目标是在 track/reward 不退化前提下把 jac 压到 ~2.0 附近
 - **sim2real 验证**：本轮已确认 LCP 不伤任务，下一步应上真机验证"平滑度提升 → 迁移更稳"这一核心假设（这才是 LCP 的最终价值）
 - 监测指标沿用 `Policy/jac_proxy` + 双脚离地占比（exp2.0 为 2% vs 1.11 的 9%，步态略偏保守，可关注）
+
+---
+
+# exp2.1 —— action 低通滤波（可开关）
+
+### §1 背景与定位
+
+exp2.0 已把**策略层**平滑度压到 jac_frob 2.933（-55%），但**踝关节力矩的高频颤振**仍在（[diag_e20_ankle4.py](file:///e:/X1/F1_one/X1_29_re0_ada/czy/analysis/diag_e20_ankle4.py) 实测：>5Hz 成分 ~3.0~3.5 Nm，跨 8 个版本几乎恒定）。
+
+关键分层结论（exp2.0 踝抖分析）：
+- **速度抖动量 99% 是 <5Hz 的步态运动**（正常），不是缺陷
+- 真正的"颤振"在**力矩 >5Hz 成分**，且与策略版本无关 → 指向**执行/指令层**而非策略层
+- exp2.0 的 roll **指令抖 100.7 vs 实际抖 17.71（比值 5.68）** → 策略层仍是源头之一，但 exp2.0 的 LCP 已压策略层，剩余高频需在执行层截断
+
+因此 exp2.1 = exp2.0 + **action 一阶低通滤波**，在指令下发前截断高频，目标把 τ 高频颤振 3.01 → <1.5 Nm。
+
+### §2 改动（三处，均可开关）
+
+| 文件 | 改动 |
+| --- | --- |
+| [x1_dh_stand_config.py](file:///e:/X1/F1_one/X1_29_re0_ada/humanoid/envs/x1/x1_dh_stand_config.py#L52-L57) | 新增 `use_action_filter`（开关）+ `action_filter_fc`（截止频率，默认 10.0 Hz） |
+| [x1_dh_stand_env.py](file:///e:/X1/F1_one/X1_29_re0_ada/humanoid/envs/x1/x1_dh_stand_env.py#L370-L378) `step()` | 开关开启时对 action 做一阶低通：`a_f += alpha*(a - a_f)`；关闭时 action 原样下发 |
+| 同上 `_init_buffers` / `reset_idx` | 初始化 `filtered_action` 与 `alpha`；episode 复位时清零滤波状态 |
+
+- `alpha = 2π·fc·dt / (2π·fc·dt + 1)`，控制步长 `dt = sim.dt(0.001) × decimation(10) = 0.01s`，`fc=10Hz` → **alpha = 0.3859**
+- **关闭时（`use_action_filter=False`）分支不进入，`actions` 原样下发 → 与基线逐字节等价**；旧 ckpt 回放（1.11/exp2.0）行为完全不变
+- 保留 exp2.0 的 LCP 配置（`lcp_weight=1e-5`、`lcp_warmup_iters=1500`、`learning_rate=1e-5`），即 exp2.1 = exp2.0 + 滤波
+
+> 设计取舍：滤波作用于**策略输出**而非力矩。`self.actions` 记录的是滤波后的值（供观测与 action_smoothness 奖励），使策略学会与滤波器协同，而非对抗它。
+
+### §3 冒烟验证（按用户要求跳过）
+
+用户决定不跑冒烟，直接提交 6000 轮正式训练。
+（曾起 TASK_20260923_118 `exp2_1_smoke`（20 轮）后按用户指示于 16:22 停止）
+
+### §4 训练启动记录
+
+| 任务 | 账号 | 项目 | 算力 | Commit | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| TASK_20260923_118 | 4383（limxmts09pfmxixbhu） | PRO_20260923_018 | 4090D·24G（ESKU000001） | c0063d7 | ⏹️ 冒烟已停止（用户指示跳过） |
+| **TASK_20260923_127** | **4383（limxmts09pfmxixbhu）** | **PRO_20260923_018** | **4090D·24G（ESKU000001）** | **c0063d7** | 🔄 运行中（16:23 起，6000 轮） |
+
+- 账号 4382 已标记 exhausted（exp2.0 消耗）；新账号 4383 起跑前已更新账号中心 Git token
+- 账号池现剩 11 个可用（4383 为当前活跃）
+- 镜像 BJX00000001 / V000057；run_name = `exp2_1`
+
+### §5 验收标准
+
+| 指标 | 通过标准 | 说明 |
+| --- | --- | --- |
+| **τ 高频颤振（>5Hz，踝）** | **< 1.5 Nm**（exp2.0 为 3.01~3.5） | 本轮核心目标 |
+| track 0.2/0.4/0.6 档 | ≥ 83/80/76%（exp2.0 86/83/79，容差 3pp） | 步态不能退化 |
+| reward | ≥ 185（exp2.0 191.3） | 不能崩 |
+| \|vx\| | ≥ 0.27 m/s（exp2.0 0.282） | 速度不能掉 |
+| 双脚离地占比 | > 30% | 步态存在 |
+| ‖∂μ/∂s‖_F | 不显著高于 exp2.0 的 2.933 | 滤波不应反向破坏 LCP 平滑 |
+
+**回放诊断**：复用 [diag_e20_ankle4.py](file:///e:/X1/F1_one/X1_29_re0_ada/czy/analysis/diag_e20_ankle4.py)（原始 `tau_des_*` 列已在回放 CSV 内，无需改 play.py）。
+
