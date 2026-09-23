@@ -370,6 +370,10 @@ class X1DHStandEnv(LeggedRobot):
     def step(self, actions):
         if self.cfg.env.use_ref_actions:
             actions += self.ref_action
+        # exp2.1: action 一阶低通滤波（可开关）；关闭时 actions 原样下发，与基线一致
+        if self.cfg.env.use_action_filter:
+            self.filtered_action += self.action_filter_alpha * (actions - self.filtered_action)
+            actions = self.filtered_action
         return super().step(actions)
 
     def compute_observations(self):
@@ -529,6 +533,7 @@ class X1DHStandEnv(LeggedRobot):
         self.last_last_actions[env_ids] = 0.
         self.actions[env_ids] = 0.
         self.last_actions[env_ids] = 0.
+        self.filtered_action[env_ids] = 0.
         self.last_rigid_state[env_ids] = 0.
         self.last_dof_vel[env_ids] = 0.
         self.last_root_vel[env_ids] = 0.
@@ -590,6 +595,13 @@ class X1DHStandEnv(LeggedRobot):
         self.sym_half_steps = int(self.cfg.rewards.cycle_time / 2 /
                                   (self.cfg.sim.dt * self.cfg.control.decimation))
         self.sym_hist = torch.zeros(self.num_envs, self.sym_half_steps, 6, device=self.device)
+
+        # exp2.1: action 一阶低通滤波状态与系数（仅在 use_action_filter=True 时参与计算）
+        # alpha = 2π·fc·dt / (2π·fc·dt + 1)，dt 为控制步长
+        self.filtered_action = torch.zeros(self.num_envs, self.cfg.env.num_actions, device=self.device)
+        ctrl_dt = self.cfg.sim.dt * self.cfg.control.decimation
+        wc = 2 * torch.pi * self.cfg.env.action_filter_fc * ctrl_dt
+        self.action_filter_alpha = (wc / (wc + 1)).item()
 
 # ================================================ Rewards ================================================== #
     def _reward_ref_joint_pos(self):

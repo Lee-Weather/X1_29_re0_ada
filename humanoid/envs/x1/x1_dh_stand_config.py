@@ -50,6 +50,10 @@ class X1DHStandCfg(LeggedRobotCfg):
         num_envs = 4096
         episode_length_s = 24 #episode length in seconds
         use_ref_actions = False
+        # exp2.1: action 一阶低通滤波（可开关）。用于抑制策略层高频抖动传导到关节力矩。
+        # 关闭时行为与基线完全一致；开启后 action 经 alpha 平滑再下发。
+        use_action_filter = True
+        action_filter_fc = 10.0  # 截止频率 Hz（控制步长 100Hz 下的经验值）
         num_commands = 5 # sin_pos cos_pos vx vy vz
 
     class safety:
