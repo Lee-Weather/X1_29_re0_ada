@@ -600,8 +600,8 @@ class X1DHStandEnv(LeggedRobot):
         # alpha = 2π·fc·dt / (2π·fc·dt + 1)，dt 为控制步长
         self.filtered_action = torch.zeros(self.num_envs, self.cfg.env.num_actions, device=self.device)
         ctrl_dt = self.cfg.sim.dt * self.cfg.control.decimation
-        wc = 2 * torch.pi * self.cfg.env.action_filter_fc * ctrl_dt
-        self.action_filter_alpha = (wc / (wc + 1)).item()
+        wc = 2 * float(torch.pi) * float(self.cfg.env.action_filter_fc) * ctrl_dt
+        self.action_filter_alpha = wc / (wc + 1)
 
 # ================================================ Rewards ================================================== #
     def _reward_ref_joint_pos(self):
