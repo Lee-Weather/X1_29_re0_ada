@@ -52,7 +52,7 @@ class X1DHStandCfg(LeggedRobotCfg):
         use_ref_actions = False
         # exp2.1: action 一阶低通滤波（可开关）。用于抑制策略层高频抖动传导到关节力矩。
         # 关闭时行为与基线完全一致；开启后 action 经 alpha 平滑再下发。
-        use_action_filter = True
+        use_action_filter = False
         action_filter_fc = 10.0  # 截止频率 Hz（控制步长 100Hz 下的经验值）
         num_commands = 5 # sin_pos cos_pos vx vy vz
 
@@ -149,9 +149,11 @@ class X1DHStandCfg(LeggedRobotCfg):
         control_type = 'P'
 
         stiffness = {'hip_pitch_joint': 30, 'hip_roll_joint': 40,'hip_yaw_joint': 35,
-                     'knee_pitch_joint': 100, 'ankle_pitch_joint': 35, 'ankle_roll_joint': 35}
-        damping = {'hip_pitch_joint': 3, 'hip_roll_joint': 3.0,'hip_yaw_joint': 4, 
-                   'knee_pitch_joint': 8, 'ankle_pitch_joint': 1.5, 'ankle_roll_joint': 1.5}
+                     'knee_pitch_joint': 100, 'ankle_pitch_joint': 28, 'ankle_roll_joint': 28}
+        # exp2.1p: 踝 KP 35→28（颤振 ∝ KP，实测 -20%）；踝 pitch KD 1.5→1.2
+        # （D 项高频占 ~1/3，降 KD 小幅减颤振；roll KD 实测无影响故保持）
+        damping = {'hip_pitch_joint': 3, 'hip_roll_joint': 3.0,'hip_yaw_joint': 4,
+                   'knee_pitch_joint': 8, 'ankle_pitch_joint': 1.2, 'ankle_roll_joint': 1.5}
 
         # action scale: target angle = actionScale * action + defaultAngle
         action_scale = 0.5
@@ -420,7 +422,9 @@ class X1DHStandCfgPPO(LeggedRobotCfgPPO):
         # 1.11l（w=1e-4，无 warmup）失效机理：策略退化为"时间恒定动作输出"（μ=const，Δaction 塌到 3~10%，
         # 蹲姿、双脚 0% 离地、16 项奖励同时变差）——LCP 二阶梯度压倒 PPO 一阶任务梯度，起爆于 step~504（学步关键期）。
         # exp2.0 对策：(1) warmup 1500 轮纯任务训练（步态先成为强吸引子）；(2) 权重降到 1e-5。
-        lcp_weight = 1e-5
+        # exp2.1p: 权重加码到 3e-5（exp2.0 末期 jac_frob 2.933 仍有下压空间，目标 ~2.2~2.5），
+        # warmup 保持 1500；止损：jac_proxy 跌破 2.0 或 reward 掉出 1.11 的 5% 带宽。
+        lcp_weight = 3e-5
         lcp_warmup_iters = 1500
         num_learning_epochs = 2
         gamma = 0.994
