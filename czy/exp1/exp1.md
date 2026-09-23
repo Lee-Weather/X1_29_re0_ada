@@ -2356,11 +2356,27 @@ exp2.0 已把**策略层**平滑度压到 jac_frob 2.933（-55%），但**踝关
 | 任务 | 账号 | 项目 | 算力 | Commit | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | TASK_20260923_118 | 4383（limxmts09pfmxixbhu） | PRO_20260923_018 | 4090D·24G（ESKU000001） | c0063d7 | ⏹️ 冒烟已停止（用户指示跳过） |
-| **TASK_20260923_127** | **4383（limxmts09pfmxixbhu）** | **PRO_20260923_018** | **4090D·24G（ESKU000001）** | **c0063d7** | 🔄 运行中（16:23 起，6000 轮） |
+| TASK_20260923_127 | 4383（limxmts09pfmxixbhu） | PRO_20260923_018 | 4090D·24G（ESKU000001） | c0063d7 | ❌ **status=6 崩溃**（17:33，env 初始化 bug） |
+| **TASK_20260923_153** | **4383（limxmts09pfmxixbhu）** | **PRO_20260923_018** | **4090D·24G（ESKU000001）** | **bddc4d5（修复后）** | 🔄 运行中（17:49 起，6000 轮） |
 
 - 账号 4382 已标记 exhausted（exp2.0 消耗）；新账号 4383 起跑前已更新账号中心 Git token
 - 账号池现剩 11 个可用（4383 为当前活跃）
 - 镜像 BJX00000001 / V000057；run_name = `exp2_1`
+
+### §4b 首次运行崩溃与修复（重要教训）
+
+**崩溃**（TASK_20260923_127，启动 ~70min 后在 env 初始化即终止）：
+
+```
+x1_dh_stand_env.py:604  self.action_filter_alpha = (wc / (wc + 1)).item()
+AttributeError: 'float' object has no attribute 'item'
+```
+
+**根因**：`torch.pi` 是 Python **float**（不是 tensor），故 `wc = 2*torch.pi*fc*dt` 也是 float，不能调 `.item()`。写成 tensor 时才能 `.item()`，属笔误。
+
+**修复**（commit `bddc4d5`，main；`4e50251`，分支 exp2_1p）：`float()` 显式包裹，alpha 直接取浮点（值不变，仍为 0.3859）。
+
+**教训**：**冒烟测试本可 1 个 iter 内暴露此错**。跳过冒烟后，该 bug 直到 ~70min 的容器启动结束才炸，白白消耗 4185s 的 4090D（≈¥6.3）。此后再改 env 代码应先跑 20 轮冒烟。
 
 ### §5 验收标准
 
@@ -2448,9 +2464,10 @@ exp2.0 已把**策略层**平滑度压到 jac_frob 2.933（-55%），但**踝关
 
 | 任务 | 账号 | 项目 | 算力 | 分支 / Commit | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| **TASK_20260923_146** | **4383（limxmts09pfmxixbhu）** | **PRO_20260923_018** | **4090D·24G（ESKU000001）** | **`exp2_1p` / `d806d36`** | 🔄 已提交（17:03，status=2 排队；等 exp2.1 让出 4090D） |
+| **TASK_20260923_146** | **4383（limxmts09pfmxixbhu）** | **PRO_20260923_018** | **4090D·24G（ESKU000001）** | **`exp2_1p` / `4e50251`** | 🔄 运行中（17:03:34 起，6000 轮） |
 
 - 镜像 BJX00000001 / V000057；run_name = `exp2_1p`；6000 轮
+- **本任务受 exp2.1 的同款 bug 影响**（`action_filter_alpha` 的 `.item()`）。其容器启动约 70min，clone 发生在启动末尾（≈18:12），**在 clone 前已把修复 cherry-pick 到分支**（`d806d36`→`4e50251`），故本任务应能拉到修复版。若日志仍出现 `'float' object has no attribute 'item'`，需重建。
 - **代码放在独立分支 `exp2_1p`**：exp2.1（TASK_20260923_127）从 `main` 拉取，其容器可能尚未 clone（~1h 启动窗口），若把 exp2.1p 的配置推到 `main` 会污染 exp2.1 的代码版本 → 用分支隔离。**main 保持 exp2.1 的配置不动。**
 - 分支内容 = exp2.1p 的 config 改动；`exp1.md` 文档同时同步到 main（不影响训练代码）
 
