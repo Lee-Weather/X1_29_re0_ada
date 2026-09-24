@@ -10,7 +10,8 @@ import pandas as pd
 FS = 50.0
 VERS = [('1.11 (无LCP)', 'czy/data/exp_ada_1.11/isaac_diag.csv'),
         ('1.11l (LCP无warmup)', 'czy/data/exp_ada_1.11l/isaac_diag.csv'),
-        ('exp2.0 (LCP+warmup)', 'czy/data/exp2.0/isaac_diag.csv')]
+        ('exp2.0 (LCP+warmup)', 'czy/data/exp2.0/isaac_diag.csv'),
+        ('exp2.1 (LPF fc=10Hz)', 'czy/data/exp2.1/isaac_diag.csv')]
 
 
 def swing_peaks(z, mask, min_len=5):

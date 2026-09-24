@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 
 CAND = [('1.11', 'czy/data/exp_ada_1.11/isaac_diag.csv'),
-        ('exp2.0', 'czy/data/exp2.0/isaac_diag.csv')]
+        ('exp2.0', 'czy/data/exp2.0/isaac_diag.csv'),
+        ('exp2.1', 'czy/data/exp2.1/isaac_diag.csv')]
 FS = 100.0
 KP = 35.0   # ankle_pitch / ankle_roll
 KD = 1.5
