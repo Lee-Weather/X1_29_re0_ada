@@ -69,8 +69,9 @@ for jn in ['pitch', 'roll']:
 
 # ---------- 绘图 ----------
 fig, axes = plt.subplots(2, 2, figsize=(15, 9), sharex=True)
-fig.suptitle('exp2.0 踝关节响应：指令 → 实际位置 → 力矩（0.4 m/s 稳态行走，'
-             '100Hz，步态周期 0.7s；灰色阴影 = 摆动相）', fontsize=13.5, y=0.985)
+fig.suptitle('exp1.3t1', fontsize=16, y=0.995)
+fig.text(0.5, 0.952, '踝关节响应：指令 → 实际位置 → 力矩（0.4 m/s 稳态行走，'
+         '100Hz，步态周期 0.7s；灰色阴影 = 摆动相）', ha='center', fontsize=11.5)
 
 order = [('pitch_L', 0, 0, '① 踝 pitch（左）'), ('pitch_R', 0, 1, '② 踝 pitch（右）'),
          ('roll_L', 1, 0, '③ 踝 roll（左）'), ('roll_R', 1, 1, '④ 踝 roll（右）')]
