@@ -421,7 +421,8 @@ class X1DHStandCfgPPO(LeggedRobotCfgPPO):
         # 1.11l（w=1e-4，无 warmup）失效机理：策略退化为"时间恒定动作输出"（μ=const，Δaction 塌到 3~10%，
         # 蹲姿、双脚 0% 离地、16 项奖励同时变差）——LCP 二阶梯度压倒 PPO 一阶任务梯度，起爆于 step~504（学步关键期）。
         # exp2.0 对策：(1) warmup 1500 轮纯任务训练（步态先成为强吸引子）；(2) 权重降到 1e-5。
-        lcp_weight = 1e-5
+        # exp2.2a（单变量拆解臂）：仅把 lcp_weight 1e-5 → 3e-5，其余同 exp2.0 基线。
+        lcp_weight = 3e-5
         lcp_warmup_iters = 1500
         num_learning_epochs = 2
         gamma = 0.994
