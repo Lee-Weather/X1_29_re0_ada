@@ -150,9 +150,10 @@ class X1DHStandCfg(LeggedRobotCfg):
         control_type = 'P'
 
         stiffness = {'hip_pitch_joint': 30, 'hip_roll_joint': 40,'hip_yaw_joint': 35,
-                     'knee_pitch_joint': 100, 'ankle_pitch_joint': 35, 'ankle_roll_joint': 35}
-        damping = {'hip_pitch_joint': 3, 'hip_roll_joint': 3.0,'hip_yaw_joint': 4, 
-                   'knee_pitch_joint': 8, 'ankle_pitch_joint': 1.5, 'ankle_roll_joint': 1.5}
+                     'knee_pitch_joint': 100, 'ankle_pitch_joint': 28, 'ankle_roll_joint': 28}
+        # exp2.2b（单变量拆解臂）：仅踝增益下调 35→28、踝 pitch KD 1.5→1.2，其余同 exp2.0 基线。
+        damping = {'hip_pitch_joint': 3, 'hip_roll_joint': 3.0,'hip_yaw_joint': 4,
+                   'knee_pitch_joint': 8, 'ankle_pitch_joint': 1.2, 'ankle_roll_joint': 1.5}
 
         # action scale: target angle = actionScale * action + defaultAngle
         action_scale = 0.5
