@@ -2666,3 +2666,27 @@ pitch 变干净、roll 变脏，且 roll 变脏与 yaw 漂移同源 —— 策�
 
 **若需第三臂（exp2.2c 方差对照）**：单账号放不下（3×18.7=56 > 50），需再用一个账号，或等 4384 的两臂跑完后评估是否有必要。
 
+### §10 实施记录（2026-09-28）
+
+**账号切换**：4383 已耗 49.3/50 元（TASK_118/127/153/146/011 合计 32850s）→ 标记 exhausted；切到 **4384（limxmts0aihhbv2q07@uberip.com）**，登录已验证（userId 4384），账号中心 Git token 已更新（`editGitInfo code=200`，原为已吊销的 `ghp_Qe8…`）。
+
+**main 基线恢复**（commit `a627e03`）：`use_action_filter: True → False`。其余 LCP 1e-5 / warmup 1500 / 踝 KP 35 / KD 1.5 本已正确。
+
+**两臂分支**（均从恢复后的 main 切出，`git diff` 已核对仅差下列变量）：
+
+| 分支 | commit | 与基线的**唯一**差异 | 核对 |
+| --- | --- | --- | --- |
+| `exp2_2a` | `1e4a423` | `lcp_weight: 1e-5 → 3e-5` | ✅ diff 仅此一行 |
+| `exp2_2b` | `d1af53c` | 踝 KP `35→28`（pitch+roll）、踝 pitch KD `1.5→1.2` | ✅ diff 仅此两行 |
+
+**任务启动**（同项目 PRO_20260923_018、4090D·24G ESKU000001、镜像 BJX00000001/V000057、6000 轮、账号 4384）：
+
+| 任务 | run_name | 分支 | 状态 |
+| --- | --- | --- | --- |
+| **TASK_20260928_140** | `exp2_2a` | `exp2_2a` / `1e4a423` | 🔄 已启动（status=2 排队中） |
+| **TASK_20260928_141** | `exp2_2b` | `exp2_2b` / `d1af53c` | 🔄 已启动（status=2 排队中） |
+
+**回放版本纪律**：exp2_2a 回放必须 checkout `exp2_2a`；exp2_2b 用 `exp2_2b`。**传输代码前先确认分支**（exp2.1p 曾因未及时同步修复而崩溃）。
+
+**监控脚本**：复用 [diag_e21p_curves.py](file:///e:/X1/F1_one/X1_29_re0_ada/czy/analysis/diag_e21p_curves.py)，改 TASK 号即可读 `mean_reward` / `jac_proxy` / `mean_noise_std`。
+
