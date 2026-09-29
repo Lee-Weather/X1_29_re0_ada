@@ -13,7 +13,8 @@ VERS = [('1.11 (无LCP)', 'czy/data/exp_ada_1.11/isaac_diag.csv'),
         ('exp2.0 (LCP+warmup)', 'czy/data/exp2.0/isaac_diag.csv'),
         ('exp2.1 (LPF fc=10Hz)', 'czy/data/exp2.1/isaac_diag.csv'),
         ('exp2.1p (LCP3e-5+KP28)', 'czy/data/exp2.1p/isaac_diag.csv'),
-        ('exp2.2b (KP28 only)', 'czy/data/exp2.2b/isaac_diag.csv')]
+        ('exp2.2b (KP28 only)', 'czy/data/exp2.2b/isaac_diag.csv'),
+        ('exp2.2a (LCP3e-5 only)', 'czy/data/exp2.2a/isaac_diag.csv')]
 
 
 def swing_peaks(z, mask, min_len=5):
