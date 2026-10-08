@@ -32,6 +32,17 @@
 
 from humanoid.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
 
+# =====================================================================
+# exp2.3b（2026-10-06）降抖干预臂
+# 相对 main（== exp2.0 配置）的唯一参数差异：
+#   action_smoothness: -0.002 -> -0.05（25x）
+# 依据：踝抖是时间域高频颤振（exp2.2a 实测为 9.1Hz 极限环），而
+#   一阶/二阶差分惩罚对 9.1Hz 的敏感度分别是步态(1.4Hz)的 42 倍 / 1700 倍；
+#   原权重下该惩罚仅占最大正项 0.37%（实质等于关闭）。
+# 其余全部与 exp2.0 一致：use_action_filter = False / lcp_weight = 1e-5 /
+#   lcp_warmup_iters = 1500 / 踝 stiffness 35 / ankle_pitch damping 1.5。
+# =====================================================================
+
 class X1DHStandCfg(LeggedRobotCfg):
     """
     Configuration class for the XBotL humanoid robot.
@@ -374,7 +385,8 @@ class X1DHStandCfg(LeggedRobotCfg):
             base_height = 0.2
             base_acc = 0.2
             # energy
-            action_smoothness = -0.002
+            # exp2.3b: -0.002 -> -0.05（25x），压时间域高频颤振
+            action_smoothness = -0.05
             torques = -8e-9
             dof_vel = -2e-8
             dof_acc = -1e-7
