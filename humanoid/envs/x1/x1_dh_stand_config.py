@@ -32,6 +32,15 @@
 
 from humanoid.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
 
+# =====================================================================
+# exp2.3a（2026-10-06）方差对照臂
+# 用途：量化 run-to-run 噪声带（弧线 yaw 漂移 / 速度跟踪）。
+# 除本注释外，本文件与 main（== exp2.0 配置）逐字节等价：
+#   use_action_filter = False / lcp_weight = 1e-5 / lcp_warmup_iters = 1500
+#   踝 stiffness 35 / ankle_pitch damping 1.5
+# 禁止在本分支上做任何参数改动，否则方差基线失效。
+# =====================================================================
+
 class X1DHStandCfg(LeggedRobotCfg):
     """
     Configuration class for the XBotL humanoid robot.
