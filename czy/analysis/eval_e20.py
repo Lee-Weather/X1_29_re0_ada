@@ -14,7 +14,9 @@ VERS = [('1.11 (无LCP)', 'czy/data/exp_ada_1.11/isaac_diag.csv'),
         ('exp2.1 (LPF fc=10Hz)', 'czy/data/exp2.1/isaac_diag.csv'),
         ('exp2.1p (LCP3e-5+KP28)', 'czy/data/exp2.1p/isaac_diag.csv'),
         ('exp2.2b (KP28 only)', 'czy/data/exp2.2b/isaac_diag.csv'),
-        ('exp2.2a (LCP3e-5 only)', 'czy/data/exp2.2a/isaac_diag.csv')]
+        ('exp2.2a (LCP3e-5 only)', 'czy/data/exp2.2a/isaac_diag.csv'),
+        ('exp2.3a (rerun exp2.0)', 'czy/data/exp2.3a/isaac_diag.csv'),
+        ('exp2.3b (smooth -0.05)', 'czy/data/exp2.3b/isaac_diag.csv')]
 
 
 def swing_peaks(z, mask, min_len=5):
@@ -105,3 +107,52 @@ for tag, path in VERS:
         jr = np.std(np.diff(df[f'vel_right_{j}_joint'].values[m])) * FS
         row.append(f'{jl:.1f}/{jr:.1f}')
     print(f'{tag:>22} {row[0]:>16} {row[1]:>16} {row[2]:>16}')
+
+print()
+print('=' * 104)
+print('五、新增标准指标（exp2.3 方案 §7）：踝τ高频 / 力矩>5Hz能量占比 / 谱峰 / 踝稳态误差')
+print(f'{"版本":>22} {" ankle tau_hf r/p":>17} {"knee>5Hz":>9} {"hip>5Hz":>8} {"ank>5Hz":>8} '
+      f'{"ank pk(Hz)":>11} {"ank_err_roll":>13}')
+print('-' * 104)
+FS_HI = 100.0
+
+
+def hp_t(x, fc=5.0):
+    w = max(3, int(FS_HI / fc))
+    return np.std(x - np.convolve(x, np.ones(w) / w, mode='same'))
+
+
+def hf_ratio(x):
+    x = x - x.mean()
+    n = len(x)
+    f = np.fft.rfftfreq(n, 1 / FS_HI)
+    P = np.abs(np.fft.rfft(x * np.hanning(n))) ** 2
+    lo = P[(f > 0) & (f <= 5)].sum()
+    hi = P[(f > 5) & (f <= 50)].sum()
+    return hi / (lo + hi) * 100
+
+
+def peak_hz(x):
+    x = x - x.mean()
+    n = len(x)
+    f = np.fft.rfftfreq(n, 1 / FS_HI)
+    P = np.abs(np.fft.rfft(x * np.hanning(n))) ** 2
+    sel = (f >= 1) & (f <= 50)
+    return f[sel][np.argmax(P[sel])]
+
+
+for tag, path in VERS:
+    df = pd.read_csv(path, encoding='utf-8-sig')
+    m = np.abs(df['cmd_linear_x'].values) > 0.05
+    t_roll = np.mean([hp_t(df[f'effort_{s}_ankle_roll_joint'].values[m]) for s in ['left', 'right']])
+    t_pitch = np.mean([hp_t(df[f'effort_{s}_ankle_pitch_joint'].values[m]) for s in ['left', 'right']])
+    e_knee = hf_ratio(df['effort_left_knee_pitch_joint'].values[m])
+    e_hip = hf_ratio(df['effort_left_hip_pitch_joint'].values[m])
+    e_ank = hf_ratio(df['effort_left_ankle_pitch_joint'].values[m])
+    pk = peak_hz(df['effort_left_ankle_pitch_joint'].values[m])
+    ae = np.mean([np.mean(np.abs(df[f'pos_des_{s}_ankle_roll_joint'].values[m]
+                                 - df[f'pos_{s}_ankle_roll_joint'].values[m]))
+                  for s in ['left', 'right']])
+    tau = '%.2f/%.2f' % (t_roll, t_pitch)
+    print(f'{tag:>22} {tau:>17} {e_knee:>8.1f}% {e_hip:>7.1f}% {e_ank:>7.1f}% '
+          f'{pk:>11.1f} {ae:>13.3f}')

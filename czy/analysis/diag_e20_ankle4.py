@@ -14,7 +14,9 @@ CAND = [('1.6', 'czy/data/exp_ada_1.6/isaac_diag.csv'),
         ('exp2.1', 'czy/data/exp2.1/isaac_diag.csv'),
         ('exp2.1p', 'czy/data/exp2.1p/isaac_diag.csv'),
         ('exp2.2b', 'czy/data/exp2.2b/isaac_diag.csv'),
-        ('exp2.2a', 'czy/data/exp2.2a/isaac_diag.csv')]
+        ('exp2.2a', 'czy/data/exp2.2a/isaac_diag.csv'),
+        ('exp2.3a', 'czy/data/exp2.3a/isaac_diag.csv'),
+        ('exp2.3b', 'czy/data/exp2.3b/isaac_diag.csv')]
 FS = 100.0
 
 
